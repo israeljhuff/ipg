@@ -1,0 +1,16 @@
+rules                 : ws rule+ ws;
+rule                  : ws id ws ("discard" | "inline")? ws ":" ws alts ws ";" ws;
+ws discard            : [ \n\r\t]*;
+id                    : [A-Za-z][0-9A-Za-z_]*;
+alts                  : alt (ws "|" ws alt)*;
+alt                   : elem (ws elem)*;
+elem                  : (group | id | ch_class | string) [?*+]?;
+group                 : "(" ws alts ws ")";
+string                : "\"" string_char* "\"";
+string_char inline    : [\u0020-\U0010ffff!"!\\] | "\\" esc;
+ch_class              : "[" "^"? ch_class_range ("!"? ch_class_range)* "]";
+ch_class_range        : ch_class_char ("-" ch_class_char)?;
+ch_class_char         : [\u0020-\U0010ffff!\\!\]] | "\\" esc;
+esc inline            : [\!\-\[\\\]\^abfnrtv] | unicode;
+unicode inline        : "u" hex hex hex hex | "U00" hex hex hex hex hex hex;
+hex inline            : [0-9A-Fa-f];
