@@ -1,7 +1,14 @@
+// g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
+// g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
+
+
+// TODO: concatenate all consecutive inline stuff into a single CSTNode under parent **************
+// TODO: inline rules should have a return value telling parent that it must build concat list ****
+
+
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: track count of (\r)\n
 
-// TODO: different esc char restrictions for '' vs ""
 // TODO: getters/setters
 // TODO: vector instead of map for rule list?
 
@@ -241,6 +248,11 @@ R"foo(
 #include <string>
 #include <vector>
 
+// TODO: replace with enum class
+#define RET_FAIL 0
+#define RET_OK 1
+#define RET_INLINE 2
+
 class CSTNode
 {
 public:
@@ -331,9 +343,9 @@ int main(int argc, char **argv)
 	int32_t retval = p.parse_rules(cstn);
 	printf("%%d\n", p.line());
 	printf("%%u %%lu\n", p.pos(), p.len());
+	cstn.print();
 	printf("%%s\n", (retval && p.pos() == p.len()) ? "parsed successfully" : "error parsing");
 	p.print_errs();
-	cstn.print();
 	delete[] buf;
 	return 0;
 }
@@ -345,7 +357,7 @@ int main(int argc, char **argv)
 	{
 		printf("\n");
 		printf("\t// ***RULE*** %s\n", rule.to_string().c_str());
-		printf("\tbool parse_%s(CSTNode &parent)\n", rule.m_name.c_str());
+		printf("\tint32_t parse_%s(CSTNode &parent)\n", rule.m_name.c_str());
 		printf("\t{\n");
 		printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.m_name.c_str());
 		printf("\t\tuint32_t pos_prev = m_pos;\n");
@@ -370,7 +382,10 @@ int main(int argc, char **argv)
 			printf("\t\t\tparent.add_child(cstn0);\n");
 			printf("\t\t}\n");
 		}
-		printf("\t\treturn ok0;\n");
+		std::string ret_str = "RET_OK";
+		if ("inline" == rule.m_mod) ret_str = "RET_INLINE";
+		printf("\t\tif (ok0) return %s;\n", ret_str.c_str());
+		printf("\t\telse return RET_FAIL;\n");
 		printf("\t}\n");
 	}
 
@@ -518,7 +533,8 @@ int main(int argc, char **argv)
 
 		if (ElemType::NAME == elem.m_type)
 		{
-			printf("%sbool ok%d = parse_%s(cstn%d);\n", tabs.c_str(), depth, elem.m_text[0].c_str(), depth - 2);
+			printf("%sint32_t ok%d = parse_%s(cstn%d);\n", tabs.c_str(), depth, elem.m_text[0].c_str(), depth - 2);
+			printf("%sif (RET_INLINE == ok%d) printf(\"INLINE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\\n\");\n", tabs.c_str(), depth);
 		}
 		// NOTE: assumes valid expression since parser should have validated
 		else if (ElemType::CH_CLASS == elem.m_type)
