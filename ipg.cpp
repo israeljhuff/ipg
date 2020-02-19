@@ -1,17 +1,11 @@
 // g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
 
-
-// TODO: concatenate all consecutive inline stuff into a single CSTNode under parent **************
-// TODO: inline rules should have a return value telling parent that it must build concat list ****
-
-
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: track count of (\r)\n
 
 // TODO: getters/setters
 // TODO: vector instead of map for rule list?
-
 
 #include <cstdint>
 #include <cstdio>
@@ -534,7 +528,15 @@ int main(int argc, char **argv)
 		if (ElemType::NAME == elem.m_type)
 		{
 			printf("%sint32_t ok%d = parse_%s(cstn%d);\n", tabs.c_str(), depth, elem.m_text[0].c_str(), depth - 2);
-			printf("%sif (RET_INLINE == ok%d) printf(\"INLINE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\\n\");\n", tabs.c_str(), depth);
+			if ("inline" == m_grammar.m_rules[elem.m_text[0]].m_mod)
+			{
+				printf("%sif (RET_INLINE == ok%d)\n", tabs.c_str(), depth);
+				printf("%s{\n", tabs.c_str());
+				printf("%s\tCSTNode cstn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
+					tabs.c_str(), depth, depth - 1, depth - 1, depth - 1);
+				printf("%s\tcstn%d.add_child(cstn%d);\n", tabs.c_str(), depth - 2, depth);
+				printf("%s}\n", tabs.c_str());
+			}
 		}
 		// NOTE: assumes valid expression since parser should have validated
 		else if (ElemType::CH_CLASS == elem.m_type)
