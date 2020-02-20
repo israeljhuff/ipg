@@ -545,12 +545,6 @@ int main(int argc, char **argv)
 			printf("%sint32_t ch_decoded;\n", tabs.c_str());
 			printf("%sint32_t len_item%d = utf8_to_int32(&ch_decoded, &m_text[m_pos]);\n", tabs.c_str(), depth);
 
-			//~ for (auto asdf : elem.m_text)
-			//~ {
-				//~ fprintf(stderr, "!!!!! %s\n", asdf.c_str());
-			//~ }
-			//~ fprintf(stderr, "\n");
-
 			int32_t idx = 1;
 			bool flag_negate_all = false;
 			int32_t range_ch1;
@@ -563,9 +557,54 @@ int main(int argc, char **argv)
 			}
 
 			// print expression to check if char matches character class
-			printf("%sif (len_item%d > 0 && %s(", tabs.c_str(), depth, flag_negate_all ? "!" : "");
+			printf("%sif (len_item%d > 0 && %s(true", tabs.c_str(), depth, flag_negate_all ? "!" : "");
+
+			// negative expressions
 			// loop over all tokens except leading and trailing [ ]
-			bool first_iter = true;
+			for (int32_t idx2 = idx; idx2 < elem.m_text.size() - 1;)
+			{
+				bool flag_is_range = false;
+
+				bool flag_negate = false;
+				ch32 = decode_to_int32((char *)elem.m_text[idx2].c_str());
+				// check for negation
+				if ('!' == ch32)
+				{
+					flag_negate = true;
+					idx2++;
+				}
+				// get first char in range
+				range_ch1 = decode_to_int32((char *)elem.m_text[idx2].c_str());
+				idx2++;
+				ch32 = decode_to_int32((char *)elem.m_text[idx2].c_str());
+				// check for range 
+				if ('-' == ch32)
+				{
+					flag_is_range = true;
+					idx2++;
+					range_ch2 = decode_to_int32((char *)elem.m_text[idx2].c_str());
+					idx2++;
+				}
+
+				if (flag_negate)
+				{
+					printf(" && ");
+
+					// print expression for this part of character class
+					if (!flag_is_range)
+					{
+						printf("%s(ch_decoded == %d)", flag_negate ? "!" : "", range_ch1);
+					}
+					else
+					{
+						printf("%s(ch_decoded >= %d && ch_decoded <= %d)", flag_negate ? "!" : "", range_ch1, range_ch2);
+					}
+				}
+			}
+
+			// positive expressions
+			// loop over all tokens except leading and trailing [ ]
+			printf(" && (false");
 			for (; idx < elem.m_text.size() - 1;)
 			{
 				bool flag_is_range = false;
@@ -591,25 +630,22 @@ int main(int argc, char **argv)
 					idx++;
 				}
 
-				if (!first_iter)
+				if (!flag_negate)
 				{
-					if (flag_negate) printf(" && ");
-					else printf(" || ");
-				}
+					printf(" || ");
 
-				// print expression for this part of character class
-				if (!flag_is_range)
-				{
-					printf("%s(ch_decoded == %d)", flag_negate ? "!" : "", range_ch1);
+					// print expression for this part of character class
+					if (!flag_is_range)
+					{
+						printf("(ch_decoded == %d)", range_ch1);
+					}
+					else
+					{
+						printf("(ch_decoded >= %d && ch_decoded <= %d)", range_ch1, range_ch2);
+					}
 				}
-				else
-				{
-					printf("%s(ch_decoded >= %d && ch_decoded <= %d)", flag_negate ? "!" : "", range_ch1, range_ch2);
-				}
-
-				first_iter = false;
 			}
-			printf("))\n");
+			printf(")))\n");
 			printf("%s{ m_pos += len_item%d; ok%d = true; }\n", tabs.c_str(), depth, depth);
 
 			printf("%sif (ok%d)\n", tabs.c_str(), depth);
