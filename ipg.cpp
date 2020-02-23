@@ -43,6 +43,7 @@ public:
 	std::string text() { return m_text; }
 	void add_child(CSTNode &child) { m_children.push_back(child); }
     CSTNode &child(uint32_t index) { return m_children[index]; }
+	std::vector<CSTNode> &children() { return m_children; }
 	void print(uint32_t depth = 0)
 	{
 		printf("%s%s\n", std::string(depth, ' ').c_str(), m_text.c_str());
@@ -257,9 +258,10 @@ public:
 	std::string text() { return m_text; }
 	void add_child(CSTNode &child) { m_children.push_back(child); }
     CSTNode &child(uint32_t index) { return m_children[index]; }
+	std::vector<CSTNode> &children() { return m_children; }
 	void print(uint32_t depth = 0)
 	{
-		printf("%%s%%s %%lu\n", std::string(depth, ' ').c_str(), m_text.c_str(), m_children.size());
+		printf("%%s/%%s/ %%lu\n", std::string(depth * 2, ' ').c_str(), m_text.c_str(), m_children.size());
 		for (auto child : m_children) child.print(depth + 1);
 	}
 private:
@@ -392,7 +394,7 @@ int main(int argc, char **argv)
 		printf("%suint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
 		if (depth > 0)
 		{
-			printf("%sCSTNode cstn%d(m_pos, \"---\");\n", tabs.c_str(), depth);
+			printf("%sCSTNode cstn%d(m_pos, \"alts_tmp\");\n", tabs.c_str(), depth);
 		}
 		printf("%sfor (;;)\n", tabs.c_str());
 		printf("%s{\n", tabs.c_str());
@@ -414,7 +416,10 @@ int main(int argc, char **argv)
 		printf("%s\tprintf(\"*%%s*\\n\", std::string(&m_text[pos_start%d], m_pos - pos_start%d).c_str());\n", tabs.c_str(), depth, depth);
 		if (depth > 0)
 		{
-			printf("%s\tcstn%d.add_child(cstn%d);\n", tabs.c_str(), depth - 2, depth);
+			printf("%sfor (auto child%d : cstn%d.children())\n", tabs.c_str(), depth, depth);
+			printf("%s{\n", tabs.c_str());
+			printf("%s\tcstn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
+			printf("%s}\n", tabs.c_str());
 		}
 		printf("%s\tm_errs.clear();\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
