@@ -15,7 +15,7 @@
 #define SCC_DEBUG 1
 
 // ----------------------------------------------------------------------------
-namespace PGEBNF
+namespace IPG
 {
 // ----------------------------------------------------------------------------
 // types of elements
@@ -73,7 +73,6 @@ public:
 		m_text.push_back(text);
 	}
 
-// TODO: should not duplicate
 	std::map<ElemType, std::string> m_elem_strs =
 	{
 		{ ElemType::NAME, "name" },
@@ -83,7 +82,6 @@ public:
 		{ ElemType::CH_CLASS, "character class" }
 	};
 
-// TODO: should not duplicate
 	std::map<QuantifierType, std::string> m_quantifier_strs =
 	{
 		{ QuantifierType::ONE, "" },
@@ -155,7 +153,7 @@ public:
 };
 
 // ----------------------------------------------------------------------------
-// EBNF parser generator
+// IPG parser generator
 class ParseGen
 {
 // private members
@@ -166,30 +164,21 @@ private:
 	const char *esc_chars = "!-[\\]^abfnrtv";
 
 	const char *m_text = nullptr;
+
 	uint32_t m_pos = 0;
 	uint32_t m_line = 1;
+	uint32_t m_col = 1;
 
 // public methods
 public:
 	// ------------------------------------------------------------------------
 	ParseGen() { m_grammar.clear(); }
 
-	std::map<ElemType, std::string> m_elem_strs =
-	{
-		{ ElemType::NAME, "name" },
-		{ ElemType::ALT, "alt" },
-		{ ElemType::GROUP, "group" },
-		{ ElemType::STRING, "string" },
-		{ ElemType::CH_CLASS, "character class" }
-	};
+	// ------------------------------------------------------------------------
+	uint32_t get_col() { return m_col; }
 
-	std::map<QuantifierType, std::string> m_quantifier_strs =
-	{
-		{ QuantifierType::ONE, "" },
-		{ QuantifierType::ZERO_ONE, "?" },
-		{ QuantifierType::ZERO_PLUS, "*" },
-		{ QuantifierType::ONE_PLUS, "+" }
-	};
+	// ------------------------------------------------------------------------
+	uint32_t get_line() { return m_line; }
 
 	// ------------------------------------------------------------------------
 	void print_rules_debug()
@@ -227,7 +216,7 @@ public:
 				fprintf(stderr, " %s", str.c_str());
 			}
 		}
-		fprintf(stderr, "%s", m_quantifier_strs[elem.m_quantifier].c_str());
+		fprintf(stderr, "%s", elem.m_quantifier_strs[elem.m_quantifier].c_str());
 	}
 
 	// ------------------------------------------------------------------------
@@ -720,6 +709,7 @@ int main(int argc, char **argv)
 		if (len_mod > 0)
 		{
 			std::string rule_mod(&m_text[m_pos - len_mod], len_mod);
+			if ("discard" != rule_mod && "inline" != rule_mod) return false;
 			m_grammar.m_rules[rule_name].m_mod = rule_mod;
 		}
 
@@ -727,7 +717,7 @@ int main(int argc, char **argv)
 
 		if (m_text[m_pos] != ':') return false;
 		m_pos++;
-		m_line++;
+		m_col++;
 
 		parse_ws();
 
@@ -738,7 +728,7 @@ int main(int argc, char **argv)
 
 		if (m_text[m_pos] != ';') return false;
 		m_pos++;
-		m_line++;
+		m_col++;
 
 		parse_ws();
 
@@ -762,12 +752,14 @@ private:
 			if (ch == ' ' || ch == '\t' || ch == '\r')
 			{
 				m_pos++;
+				if (ch != '\r') m_col++;
 				continue;
 			}
 			else if (ch == '\n')
 			{
 				m_pos++;
 				m_line++;
+				m_col = 1;
 				continue;
 			}
 			break;
@@ -784,6 +776,7 @@ private:
 		char ch = m_text[m_pos];
 		if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))) return -1;
 		m_pos++;
+		m_col++;
 		len++;
 		for (;;)
 		{
@@ -792,6 +785,7 @@ private:
 			|| (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))
 			{
 				m_pos++;
+				m_col++;
 				len++;
 				continue;
 			}
@@ -823,6 +817,7 @@ private:
 			{
 				trailing_bar = true;
 				m_pos++;
+				m_col++;
 				len++;
 
 				parse_ws();
@@ -907,6 +902,7 @@ private:
 				else if (ch == '+') qt = QuantifierType::ONE_PLUS;
 				elems[elems.size() - 1].m_quantifier = qt;
 				m_pos++;
+				m_col++;
 				len++;
 
 				parse_ws();
@@ -915,7 +911,6 @@ private:
 			if (len_item <= 0) break;
 		}
 
-		//~ if (m_text[m_pos] != ';' && m_text[m_pos] != '\0') m_pos++;
 		return len;
 	}
 
@@ -927,6 +922,7 @@ private:
 		if (SCC_DEBUG) fprintf(stderr, "parse_group\n");
 
 		uint32_t pos_prev = m_pos;
+		uint32_t col_prev = m_col;
 		uint32_t line_prev = m_line;
 		int32_t len = 0;
 
@@ -934,11 +930,13 @@ private:
 		if (ch != '(')
 		{
 			pos_prev = m_pos;
+			col_prev = m_col;
 			line_prev = m_line;
 			return -1;
 		}
 		Elem elem_group(ElemType::GROUP);
 		m_pos++;
+		m_col++;
 		len++;
 
 		parse_ws();
@@ -947,6 +945,7 @@ private:
 		if (len_alts < 0)
 		{
 			pos_prev = m_pos;
+			col_prev = m_col;
 			line_prev = m_line;
 			return -1;
 		}
@@ -958,11 +957,13 @@ private:
 		if (ch != ')')
 		{
 			pos_prev = m_pos;
+			col_prev = m_col;
 			line_prev = m_line;
 			return -1;
 		}
 		elems.push_back(elem_group);
 		m_pos++;
+		m_col++;
 		len++;
 
 		return len;
@@ -976,13 +977,15 @@ private:
 	{
 		if (SCC_DEBUG) fprintf(stderr, "parse_string %d\n", m_pos);
 		uint32_t pos_prev = m_pos;
+		uint32_t col_prev = m_col;
 		uint32_t line_prev = m_line;
 		char ch = m_text[m_pos];
 		if (ch != '"') return -1;
 		int32_t len = 1;
 		m_pos++;
+		m_col++;
 		bool esc_set = false;
-		for (;; m_pos++, len++)
+		for (;; m_pos++, m_col++, len++)
 		{
 			ch = m_text[m_pos];
 			if (ch < ' ') break;
@@ -994,6 +997,7 @@ private:
 			if (ch == '"' && !esc_set)
 			{
 				m_pos++;
+				m_col++;
 				len++;
 				std::string str(&m_text[m_pos - len], len);
 				elems.push_back(Elem(ElemType::STRING, str));
@@ -1002,6 +1006,7 @@ private:
 			esc_set = false;
 		}
 		m_pos = pos_prev;
+		m_col = col_prev;
 		m_line = line_prev;
 		return -1;
 	}
@@ -1015,6 +1020,7 @@ private:
 		if (SCC_DEBUG) fprintf(stderr, "parse_ch_class %d\n", m_pos);
 
 		uint32_t pos_prev = m_pos;
+		uint32_t col_prev = m_col;
 		uint32_t line_prev = m_line;
 
 		int32_t len = 0;
@@ -1030,6 +1036,7 @@ private:
 		elem.m_text.push_back("[");
 
 		m_pos++;
+		m_col++;
 		len++;
 		ch = m_text[m_pos];
 
@@ -1038,6 +1045,7 @@ private:
 		{
 			elem.m_text.push_back("^");
 			m_pos++;
+			m_col++;
 			len++;
 			ch = m_text[m_pos];
 		}
@@ -1047,6 +1055,7 @@ private:
 		if (-1 == len_br)
 		{
 			m_pos = pos_prev;
+			m_col = col_prev;
 			m_line = line_prev;
 			if (SCC_DEBUG) fprintf(stderr, "exiting parse_ch_class %d\n", len);
 			return -1;
@@ -1062,6 +1071,7 @@ private:
 			int32_t valid_range_elements = 0;
 			int32_t len_range = 0;
 			uint32_t pos_prev_range = m_pos;
+			uint32_t col_prev_range = m_col;
 			uint32_t line_prev_range = m_line;
 
 			// optional logical not for this range
@@ -1069,6 +1079,7 @@ private:
 			{
 				elem.m_text.push_back("!");
 				m_pos++;
+				m_col++;
 				len_range++;
 				valid_range_elements++;
 			}
@@ -1077,6 +1088,7 @@ private:
 			if (-1 == len_br)
 			{
 				m_pos = pos_prev_range;
+				m_col = col_prev_range;
 				m_line = line_prev_range;
 				for (int32_t i = 0; i < valid_range_elements; i++)
 				{
@@ -1091,6 +1103,7 @@ private:
 		if (ch != ']' || len <= 0)
 		{
 			m_pos = pos_prev;
+			m_col = col_prev;
 			m_line = line_prev;
 			len = -1;
 		}
@@ -1099,6 +1112,7 @@ private:
 			elem.m_text.push_back("]");
 			elems.push_back(elem);
 			m_pos++;
+			m_col++;
 			len++;
 		}
 
@@ -1141,6 +1155,7 @@ private:
 		if (ch != '-') return len;
 		elem.m_text.push_back(std::string(&m_text[m_pos], 1));
 		m_pos++;
+		m_col++;
 		len++;
 
 		// cannot end with trailing '-'
@@ -1183,6 +1198,7 @@ private:
 			if (len < 0) return -1;
 			elem.m_text.push_back(std::string(&m_text[m_pos], len));
 			m_pos += len;
+			m_col += len;
 			return len;
 		}
 
@@ -1191,6 +1207,7 @@ private:
 		{
 			is_esc = true;
 			m_pos++;
+			m_col++;
 			ch = m_text[m_pos];
 		}
 		if (ch >= 0 && ch < ' ') return -1;
@@ -1200,6 +1217,7 @@ private:
 		{
 			elem.m_text.push_back(std::string(&m_text[m_pos], 1));
 			m_pos++;
+			m_col++;
 			return 1;
 		}
 
@@ -1209,6 +1227,7 @@ private:
 			if (ch == esc_chars[i])
 			{
 				m_pos++;
+				m_col++;
 				elem.m_text.push_back(std::string(&m_text[m_pos - 2], 2));
 				return 2;
 			}
@@ -1218,8 +1237,9 @@ private:
 		if (ch == 'u')
 		{
 			m_pos++;
+			m_col++;
 			int32_t i = 0;
-			for (; i < 4 && is_hex_char(m_text[m_pos]); i++, m_pos++);
+			for (; i < 4 && is_hex_char(m_text[m_pos]); i++, m_pos++, m_col++);
 			if (i < 4) return -1;
 			elem.m_text.push_back(std::string(&m_text[m_pos - 6], 6));
 			return 6;
@@ -1229,8 +1249,9 @@ private:
 		if (ch == 'U')
 		{
 			m_pos++;
+			m_col++;
 			int32_t i = 0;
-			for (; i < 8 && is_hex_char(m_text[m_pos]); i++, m_pos++);
+			for (; i < 8 && is_hex_char(m_text[m_pos]); i++, m_pos++, m_col++);
 			if (i < 8) return -1;
 			elem.m_text.push_back(std::string(&m_text[m_pos - 10], 10));
 			return 10;
@@ -1355,8 +1376,8 @@ private:
 // ----------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
-	PGEBNF::ParseGen ccebnf;
-	PGEBNF::CSTNode node;
+	IPG::ParseGen pg;
+	IPG::CSTNode node;
 
 	if (argc < 2)
 	{
@@ -1386,15 +1407,18 @@ int main(int argc, char **argv)
 	}
 	fprintf(stderr, "read: %lu\n", bytes_read);
 
-	bool ok = ccebnf.parse_grammar(node, buf);
+	bool ok = pg.parse_grammar(node, buf);
 	if (ok)
 	{
-		ccebnf.print_parser();
-		ccebnf.print_rules_debug();
+		pg.print_parser();
+		pg.print_rules_debug();
+		fprintf(stderr, "parsed successfully\n");
 	}
-	else fprintf(stderr, "ERROR parsing grammar\n");
-
-	fprintf(stderr, "%s\n", ok ? "ok" : "error");
+	else
+	{
+		fprintf(stderr, "ERROR parsing grammar near line %u, col %u\n",
+			pg.get_line(), pg.get_col());
+	}
 
 	delete[] buf;
 	return 0;
