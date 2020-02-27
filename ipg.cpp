@@ -2,10 +2,9 @@
 // g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
 
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
-// TODO: track count of (\r)\n
-
-// TODO: getters/setters
 // TODO: vector instead of map for rule list?
+// TODO: check for orphaned rules
+// TODO: check for valid char class ranges (eg. not inverted, overlapping, etc.)
 
 #include <cstdint>
 #include <cstdio>
@@ -175,10 +174,10 @@ public:
 	ParseGen() { m_grammar.clear(); }
 
 	// ------------------------------------------------------------------------
-	uint32_t get_col() { return m_col; }
+	uint32_t col() { return m_col; }
 
 	// ------------------------------------------------------------------------
-	uint32_t get_line() { return m_line; }
+	uint32_t line() { return m_line; }
 
 	// ------------------------------------------------------------------------
 	void print_rules_debug()
@@ -265,10 +264,12 @@ private:
 	const char *m_text = nullptr;
 	uint32_t m_pos = 0;
 	uint32_t m_line = 1;
+	uint32_t m_col = 1;
 	std::vector<uint32_t> m_errs;
 public:
 	Parser(char *text) { m_text = text; }
 	size_t len() { return strlen(m_text); }
+	uint32_t col() { return m_col; }
 	uint32_t line() { return m_line; }
 	uint32_t pos() { return m_pos; }
 	void print_errs()
@@ -329,7 +330,18 @@ int main(int argc, char **argv)
 	printf("%%d\n", p.line());
 	printf("%%u %%lu\n", p.pos(), p.len());
 	cstn.print();
-	printf("%%s\n", (retval && p.pos() == p.len()) ? "parsed successfully" : "error parsing");
+    fprintf(stderr, "%%d\n", retval);
+	if (RET_FAIL == retval)
+	{
+		fprintf(stderr, "ERROR parsing grammar near line %%u, col %%u\n",
+			p.line(), p.col());
+	}
+	else
+	{
+		//~ printf("%%s\n", (retval && p.pos() == p.len()) ? "parsed successfully" : "error parsing");
+		fprintf(stderr, "parsed successfully\n");
+		fprintf(stderr, "finished near line %%u, col %%u\n", p.line(), p.col());
+	}
 	p.print_errs();
 	delete[] buf;
 	return 0;
@@ -346,6 +358,7 @@ int main(int argc, char **argv)
 		printf("\t{\n");
 		printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.m_name.c_str());
 		printf("\t\tuint32_t pos_prev = m_pos;\n");
+		printf("\t\tuint32_t col_prev = m_col;\n");
 		printf("\t\tuint32_t line_prev = m_line;\n");
 		printf("\t\tCSTNode cstn0(m_pos, \"%s\");\n", rule.m_name.c_str());
 		printf("\n");
@@ -357,6 +370,7 @@ int main(int argc, char **argv)
 		printf("\t\t{\n");
 		printf("\t\t\tm_errs.push_back(m_pos);\n");
 		printf("\t\t\tm_pos = pos_prev;\n");
+		printf("\t\t\tm_col = col_prev;\n");
 		printf("\t\t\tm_line = line_prev;\n");
 		printf("\t\t}\n");
 		// only add to CST if neither discard nor inline modification set
@@ -405,10 +419,10 @@ int main(int argc, char **argv)
 		printf("%s\tprintf(\"*%%s*\\n\", std::string(&m_text[pos_start%d], m_pos - pos_start%d).c_str());\n", tabs.c_str(), depth, depth);
 		if (depth > 0)
 		{
-			printf("%sfor (auto child%d : cstn%d.children())\n", tabs.c_str(), depth, depth);
-			printf("%s{\n", tabs.c_str());
-			printf("%s\tcstn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
-			printf("%s}\n", tabs.c_str());
+			printf("%s\tfor (auto child%d : cstn%d.children())\n", tabs.c_str(), depth, depth);
+			printf("%s\t{\n", tabs.c_str());
+			printf("%s\t\tcstn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
+			printf("%s\t}\n", tabs.c_str());
 		}
 		printf("%s\tm_errs.clear();\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
@@ -640,13 +654,18 @@ int main(int argc, char **argv)
 				}
 			}
 			printf(")))\n");
-			printf("%s{ m_pos += len_item%d; ok%d = true; }\n", tabs.c_str(), depth, depth);
+			printf("%s{ m_pos += len_item%d; m_col += len_item%d; ok%d = true; }\n", tabs.c_str(), depth, depth, depth);
 
 			printf("%sif (ok%d)\n", tabs.c_str(), depth);
 			printf("%s{\n", tabs.c_str());
 			printf("%s\tCSTNode cstn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
 				tabs.c_str(), depth, depth - 1, depth - 1, depth - 1);
 			printf("%s\tcstn%d.add_child(cstn%d);\n", tabs.c_str(), depth - 2, depth);
+			printf("%s\tif ('\\n' == ch_decoded)\n", tabs.c_str());
+			printf("%s\t{\n", tabs.c_str());
+			printf("%s\t\tm_line++;\n", tabs.c_str());
+			printf("%s\t\tm_col = 1;\n", tabs.c_str());
+			printf("%s\t}\n", tabs.c_str());
 			printf("%s}\n", tabs.c_str());
 		}
 		else if (ElemType::STRING == elem.m_type)
@@ -654,7 +673,7 @@ int main(int argc, char **argv)
 			printf("%sbool ok%d = false;\n", tabs.c_str(), depth);
 			printf("%sconst char *str = %s;\n", tabs.c_str(), elem.m_text[0].c_str());
 			printf("%sint32_t i = 0;\n", tabs.c_str());
-			printf("%sfor (; i < strlen(str) && m_text[m_pos] == str[i]; i++, m_pos++);\n", tabs.c_str());
+			printf("%sfor (; i < strlen(str) && m_text[m_pos] == str[i]; i++, m_pos++, m_col++);\n", tabs.c_str());
 			printf("%sif (i == strlen(str)) ok%d = true;\n", tabs.c_str(), depth);
 
 			printf("%sif (ok%d)\n", tabs.c_str(), depth);
@@ -1417,7 +1436,7 @@ int main(int argc, char **argv)
 	else
 	{
 		fprintf(stderr, "ERROR parsing grammar near line %u, col %u\n",
-			pg.get_line(), pg.get_col());
+			pg.line(), pg.col());
 	}
 
 	delete[] buf;
