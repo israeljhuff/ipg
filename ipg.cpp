@@ -1,6 +1,8 @@
 // g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
 
+// TODO: when parsing a rule (or alts?), only clear errors that occurred before it
+
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: vector instead of map for rule list?
 // TODO: check for orphaned rules
@@ -272,10 +274,17 @@ public:
 	uint32_t col() { return m_col; }
 	uint32_t line() { return m_line; }
 	uint32_t pos() { return m_pos; }
+	void print_last_err()
+	{
+		fprintf(stderr, "ERROR parsing near position %%s (line %%s column %%s)\n",
+			std::to_string(m_errs.end()[-3]).c_str(),
+			std::to_string(m_errs.end()[-2]).c_str(),
+			std::to_string(m_errs.end()[-1]).c_str());
+	}
 	void print_errs()
 	{
-		//~ for (auto err : m_errs)
-		//~ { fprintf(stderr, "E: %%s\n", std::to_string(err).c_str()); }
+		for (auto err : m_errs)
+		{ fprintf(stderr, "E: %%s\n", std::to_string(err).c_str()); }
 	}
 )foo");
 
@@ -330,19 +339,9 @@ int main(int argc, char **argv)
 	printf("%%d\n", p.line());
 	printf("%%u %%lu\n", p.pos(), p.len());
 	cstn.print();
-    fprintf(stderr, "%%d\n", retval);
-	if (RET_FAIL == retval)
-	{
-		fprintf(stderr, "ERROR parsing grammar near line %%u, col %%u\n",
-			p.line(), p.col());
-	}
-	else
-	{
-		//~ printf("%%s\n", (retval && p.pos() == p.len()) ? "parsed successfully" : "error parsing");
-		fprintf(stderr, "parsed successfully\n");
-		fprintf(stderr, "finished near line %%u, col %%u\n", p.line(), p.col());
-	}
-	p.print_errs();
+	fprintf(stderr, "%%d\n", retval);
+	if (RET_FAIL == retval || p.pos() < p.len()) p.print_last_err();
+	else fprintf(stderr, "parsed successfully\n");
 	delete[] buf;
 	return 0;
 }
@@ -369,6 +368,8 @@ int main(int argc, char **argv)
 		printf("\t\tif (!ok0)\n");
 		printf("\t\t{\n");
 		printf("\t\t\tm_errs.push_back(m_pos);\n");
+		printf("\t\t\tm_errs.push_back(m_line);\n");
+		printf("\t\t\tm_errs.push_back(m_col);\n");
 		printf("\t\t\tm_pos = pos_prev;\n");
 		printf("\t\t\tm_col = col_prev;\n");
 		printf("\t\t\tm_line = line_prev;\n");
@@ -413,6 +414,8 @@ int main(int argc, char **argv)
 		printf("%sif (!ok%d)\n", tabs.c_str(), depth);
 		printf("%s{\n", tabs.c_str());
 		printf("%s\tm_errs.push_back(m_pos);\n", tabs.c_str());
+		printf("%s\tm_errs.push_back(m_line);\n", tabs.c_str());
+		printf("%s\tm_errs.push_back(m_col);\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
 		printf("%selse\n", tabs.c_str());
 		printf("%s{\n", tabs.c_str());
@@ -424,7 +427,7 @@ int main(int argc, char **argv)
 			printf("%s\t\tcstn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
 			printf("%s\t}\n", tabs.c_str());
 		}
-		printf("%s\tm_errs.clear();\n", tabs.c_str());
+		//~ printf("%s\tm_errs.clear();\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
 	}
 
