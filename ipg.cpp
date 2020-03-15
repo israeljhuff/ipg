@@ -1,11 +1,12 @@
 // g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
 
+// TODO: getters/setters for m_* (currently all public)
+// TODO: new rule mod to exclude parent, but not children, from AST
 // TODO: when parsing a rule (or alts?), only clear errors that occurred before it
-
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: vector instead of map for rule list?
-// TODO: check for orphaned rules
+// TODO: check for duplicate rules
 // TODO: check for valid char class ranges (eg. not inverted, overlapping, etc.)
 
 #include <cstdint>
@@ -151,6 +152,7 @@ class Grammar
 public:
 	void clear() { m_rules.clear(); };
 	std::map<std::string, Rule> m_rules;
+	std::string m_rule_root = "";
 };
 
 // ----------------------------------------------------------------------------
@@ -169,6 +171,8 @@ private:
 	uint32_t m_pos = 0;
 	uint32_t m_line = 1;
 	uint32_t m_col = 1;
+
+	Grammar m_grammar;
 
 // public methods
 public:
@@ -276,7 +280,7 @@ public:
 	uint32_t pos() { return m_pos; }
 	void print_last_err()
 	{
-		fprintf(stderr, "ERROR parsing near position %%s (line %%s column %%s)\n",
+		fprintf(stderr, "ERROR parsing grammar near position %%s (line %%s column %%s)\n",
 			std::to_string(m_errs.end()[-3]).c_str(),
 			std::to_string(m_errs.end()[-2]).c_str(),
 			std::to_string(m_errs.end()[-1]).c_str());
@@ -335,7 +339,7 @@ int main(int argc, char **argv)
 	fclose(fp);
 	CSTNode cstn(0, "ROOT");
 	Parser p(buf);
-	int32_t retval = p.parse_rules(cstn);
+	int32_t retval = p.parse_%s(cstn);
 	printf("%%d\n", p.line());
 	printf("%%u %%lu\n", p.pos(), p.len());
 	cstn.print();
@@ -345,7 +349,7 @@ int main(int argc, char **argv)
 	delete[] buf;
 	return 0;
 }
-)foo");
+)foo", m_grammar.m_rule_root.c_str());
 	}
 
 	// ------------------------------------------------------------------------
@@ -699,6 +703,89 @@ int main(int argc, char **argv)
 	}
 
 	// ------------------------------------------------------------------------
+	void check_for_unreachable_rules_recurse_elems(
+		Elem &elem,
+		std::map<std::string, bool> &to_visit,
+		std::map<std::string, bool> &to_visit_new,
+		std::map<std::string, bool> &visited)
+	{
+		if (ElemType::NAME == elem.m_type)
+		{
+			std::string elem_name = elem.m_text[0];
+			// add to to_visit_new list
+			if (to_visit.find(elem_name) == to_visit.end()
+				&& visited.find(elem_name) == visited.end())
+			{
+				to_visit_new[elem_name] = true;
+			}
+		}
+		// if there are sub elems to this elem, loop over them
+		if (elem.m_sub_elems.size() > 0)
+		{
+			for (auto sub_elem : elem.m_sub_elems)
+			{
+				check_for_unreachable_rules_recurse_elems(
+					sub_elem, to_visit, to_visit_new, visited);
+			}
+		}
+	}
+
+	// ------------------------------------------------------------------------
+	bool check_for_unreachable_rules()
+	{
+		std::map<std::string, bool> to_visit;
+		std::map<std::string, bool> visited;
+		// initialize to_visit map with root rule
+		to_visit[m_grammar.m_rule_root] = true;
+		// loop until to_visit list is empty
+		while (to_visit.size() > 0)
+		{
+			std::map<std::string, bool> to_visit_new;
+
+			// loop over to_vist list
+			for (auto rule : to_visit)
+			{
+				std::string rule_name = rule.first;
+				visited[rule_name] = true;
+				// loop over child elems
+				for (int i = 0; i < m_grammar.m_rules[rule_name].m_elems.size(); i++)
+				{
+					Elem &elem = m_grammar.m_rules[rule_name].m_elems[i];
+					check_for_unreachable_rules_recurse_elems(
+						elem, to_visit, to_visit_new, visited);
+				}
+			}
+			to_visit.clear();
+			for (auto rule : to_visit_new)
+			{
+				to_visit[rule.first] = true;
+			}
+			to_visit = to_visit_new;
+
+			// erase visited rules from to_visit list
+			for (auto rule : visited)
+			{
+				std::string rule_name = rule.first;
+				auto it = to_visit.find(rule_name);
+				if (it != to_visit.end())
+				{
+					to_visit.erase(it);
+				}
+			}
+		}
+
+//~ fprintf(stderr, "\t###%lu %lu\n", m_grammar.m_rules.size(), visited.size());
+		// error if not all visited
+		if (m_grammar.m_rules.size() > visited.size())
+		{
+// TODO: print which rules were unreachable
+			return false;
+		}
+
+		return true;
+	}
+
+	// ------------------------------------------------------------------------
 	bool parse_grammar(CSTNode &node_w, const char *text_r)
 	{
 		if (SCC_DEBUG) fprintf(stderr, "parse_grammar %d\n", m_pos);
@@ -721,7 +808,11 @@ int main(int argc, char **argv)
 
 		int32_t len_name = parse_id();
 		if (len_name <= 0) return false;
+
 		std::string rule_name(&m_text[m_pos - len_name], len_name);
+		// first parsed rule is root of grammar
+		if ("" == m_grammar.m_rule_root) m_grammar.m_rule_root = rule_name;
+
 		m_grammar.m_rules[rule_name] = Rule(rule_name);
 
 		parse_ws();
@@ -757,8 +848,6 @@ int main(int argc, char **argv)
 		if (SCC_DEBUG) fprintf(stderr, "exiting parse_rule %d\n", m_pos);
 		return true;
 	}
-
-	Grammar m_grammar;
 
 // private methods
 private:
@@ -1430,6 +1519,7 @@ int main(int argc, char **argv)
 	fprintf(stderr, "read: %lu\n", bytes_read);
 
 	bool ok = pg.parse_grammar(node, buf);
+	if (ok) ok = pg.check_for_unreachable_rules();
 	if (ok)
 	{
 		pg.print_parser();
