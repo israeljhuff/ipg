@@ -6,7 +6,8 @@
 // TODO: when parsing a rule (or alts?), only clear errors that occurred before it
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: vector instead of map for rule list?
-// TODO: check for duplicate rules
+
+// TODO: check for elems within rule that are not valid other rules
 // TODO: check for valid char class ranges (eg. not inverted, overlapping, etc.)
 
 #include <cstdint>
@@ -767,10 +768,7 @@ int main(int argc, char **argv)
 			{
 				std::string rule_name = rule.first;
 				auto it = to_visit.find(rule_name);
-				if (it != to_visit.end())
-				{
-					to_visit.erase(it);
-				}
+				if (it != to_visit.end()) to_visit.erase(it);
 			}
 		}
 
@@ -778,7 +776,16 @@ int main(int argc, char **argv)
 		// error if not all visited
 		if (m_grammar.m_rules.size() > visited.size())
 		{
-// TODO: print which rules were unreachable
+			// print unreachable rules
+			for (auto rule : m_grammar.m_rules)
+			{
+				std::string rule_name = rule.first;
+				auto it = visited.find(rule_name);
+				if (it == visited.end())
+				{
+					fprintf(stderr, "ERROR: unreachable rule name '%s'\n", rule_name.c_str());
+				}
+			}
 			return false;
 		}
 
@@ -812,6 +819,12 @@ int main(int argc, char **argv)
 		std::string rule_name(&m_text[m_pos - len_name], len_name);
 		// first parsed rule is root of grammar
 		if ("" == m_grammar.m_rule_root) m_grammar.m_rule_root = rule_name;
+
+		if (m_grammar.m_rules.find(rule_name) != m_grammar.m_rules.end())
+		{
+			fprintf(stderr, "ERROR: duplicate rule name '%s'\n", rule_name.c_str());
+			return false;
+		}
 
 		m_grammar.m_rules[rule_name] = Rule(rule_name);
 
