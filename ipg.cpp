@@ -7,7 +7,6 @@
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: vector instead of map for rule list?
 
-// TODO: check for elems within rule that are not valid other rules
 // TODO: check for valid char class ranges (eg. not inverted, overlapping, etc.)
 
 #include <cstdint>
@@ -704,7 +703,9 @@ int main(int argc, char **argv)
 	}
 
 	// ------------------------------------------------------------------------
-	void check_for_unreachable_rules_recurse_elems(
+	// check for named elem and/or sub-elems and add to to_visit_new if not
+	// already in to_visit or visited
+	void check_rule_elems(
 		Elem &elem,
 		std::map<std::string, bool> &to_visit,
 		std::map<std::string, bool> &to_visit_new,
@@ -725,15 +726,19 @@ int main(int argc, char **argv)
 		{
 			for (auto sub_elem : elem.m_sub_elems)
 			{
-				check_for_unreachable_rules_recurse_elems(
-					sub_elem, to_visit, to_visit_new, visited);
+				check_rule_elems(sub_elem, to_visit, to_visit_new, visited);
 			}
 		}
 	}
 
 	// ------------------------------------------------------------------------
-	bool check_for_unreachable_rules()
+	// check for:
+	//  1) unreachable rules (no usage tracing to root rule)
+	//  2) named elems referring to non-existent rules
+	bool check_rules()
 	{
+		bool retval = true;
+
 		std::map<std::string, bool> to_visit;
 		std::map<std::string, bool> visited;
 		// initialize to_visit map with root rule
@@ -743,17 +748,23 @@ int main(int argc, char **argv)
 		{
 			std::map<std::string, bool> to_visit_new;
 
-			// loop over to_vist list
+			// loop over to_visit list
 			for (auto rule : to_visit)
 			{
 				std::string rule_name = rule.first;
 				visited[rule_name] = true;
+
+				if (m_grammar.m_rules.find(rule_name) == m_grammar.m_rules.end())
+				{
+					fprintf(stderr, "ERROR: undefined rule '%s'\n", rule_name.c_str());
+					retval = false;
+				}
+
 				// loop over child elems
 				for (int i = 0; i < m_grammar.m_rules[rule_name].m_elems.size(); i++)
 				{
 					Elem &elem = m_grammar.m_rules[rule_name].m_elems[i];
-					check_for_unreachable_rules_recurse_elems(
-						elem, to_visit, to_visit_new, visited);
+					check_rule_elems(elem, to_visit, to_visit_new, visited);
 				}
 			}
 			to_visit.clear();
@@ -771,8 +782,6 @@ int main(int argc, char **argv)
 				if (it != to_visit.end()) to_visit.erase(it);
 			}
 		}
-
-//~ fprintf(stderr, "\t###%lu %lu\n", m_grammar.m_rules.size(), visited.size());
 		// error if not all visited
 		if (m_grammar.m_rules.size() > visited.size())
 		{
@@ -783,13 +792,41 @@ int main(int argc, char **argv)
 				auto it = visited.find(rule_name);
 				if (it == visited.end())
 				{
-					fprintf(stderr, "ERROR: unreachable rule name '%s'\n", rule_name.c_str());
+					fprintf(stderr, "ERROR: unreachable rule '%s'\n", rule_name.c_str());
 				}
 			}
-			return false;
+			retval = false;
 		}
 
-		return true;
+		//~ // check for named elems referring to non-existent rules
+		//~ to_visit.clear();
+		//~ visited.clear();
+		//~ std::map<std::string, bool> to_visit_new;
+		//~ // loop over rules
+		//~ for (auto rule : m_grammar.m_rules)
+		//~ {
+			//~ fprintf(stderr, "!!! %s\n", rule.first.c_str());
+			//~ // loop over child elems
+			//~ for (int i = 0; i < rule.second.m_elems.size(); i++)
+			//~ {
+				//~ Elem &elem = rule.second.m_elems[i];
+				//~ check_rule_elems(elem, to_visit, to_visit_new, visited);
+				//~ fprintf(stderr, "@@@ %s %lu\n", rule.first.c_str(), to_visit_new.size());
+				//~ for (auto named_elem : to_visit_new)
+				//~ {
+					//~ fprintf(stderr, "\t### %s\n", named_elem.first.c_str());
+					//~ if (m_grammar.m_rules.find(named_elem.first) == m_grammar.m_rules.end())
+					//~ {
+						//~ fprintf(stderr, "ERROR: undefined rule name '%s'\n", named_elem.first.c_str());
+						//~ retval = false;
+						//~ exit(1);
+					//~ }
+				//~ }
+				//~ to_visit_new.clear();
+			//~ }
+		//~ }
+
+		return retval;
 	}
 
 	// ------------------------------------------------------------------------
@@ -1532,7 +1569,7 @@ int main(int argc, char **argv)
 	fprintf(stderr, "read: %lu\n", bytes_read);
 
 	bool ok = pg.parse_grammar(node, buf);
-	if (ok) ok = pg.check_for_unreachable_rules();
+	if (ok) ok = pg.check_rules();
 	if (ok)
 	{
 		pg.print_parser();
