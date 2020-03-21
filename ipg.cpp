@@ -1,13 +1,12 @@
 // g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
 
-// TODO: getters/setters for m_* (currently all public)
-// TODO: new rule mod to exclude parent, but not children, from AST
+// TODO: store errors, then only print last one since previous ones may just be due to alternate parsing
 // TODO: when parsing a rule (or alts?), only clear errors that occurred before it
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: vector instead of map for rule list?
 
-// TODO: check for valid char class ranges (eg. not inverted, overlapping, etc.)
+// TODO: new rule mod to exclude parent, but not children, from AST
 
 #include <cstdint>
 #include <cstdio>
@@ -92,6 +91,13 @@ public:
 		{ QuantifierType::ONE_PLUS, "+" }
 	};
 
+	ElemType type() { return m_type; }
+	std::vector<std::string> &text() { return m_text; }
+	QuantifierType &quantifier() { return m_quantifier; }
+	std::vector<Elem> &sub_elems() { return m_sub_elems; }
+	std::map<QuantifierType, std::string> &quantifier_strs()
+	{ return m_quantifier_strs; }
+
 	std::string to_string()
 	{
 		std::string str;
@@ -113,6 +119,7 @@ public:
 		return str;
 	}
 
+private:
 	ElemType m_type;
 	std::vector<std::string> m_text;
 	QuantifierType m_quantifier;
@@ -128,6 +135,10 @@ public:
 
 	Rule(std::string &name) { m_name = name; }
 
+	std::string &name() { return m_name; }
+	std::string &mod() { return m_mod; }
+	std::vector<Elem> &elems() { return m_elems; }
+
 	void clear() { m_elems.clear(); }
 
 	std::string to_string()
@@ -140,6 +151,7 @@ public:
 		return str;
 	}
 
+private:
 	std::string m_name;
 	std::string m_mod;
 	std::vector<Elem> m_elems;
@@ -150,7 +162,12 @@ public:
 class Grammar
 {
 public:
+	std::map<std::string, Rule> &rules() { return m_rules; };
+	std::string &rule_root() { return m_rule_root; };
+
 	void clear() { m_rules.clear(); };
+
+private:
 	std::map<std::string, Rule> m_rules;
 	std::string m_rule_root = "";
 };
@@ -188,10 +205,10 @@ public:
 	// ------------------------------------------------------------------------
 	void print_rules_debug()
 	{
-		for (auto rule : m_grammar.m_rules)
+		for (auto rule : m_grammar.rules())
 		{
 			fprintf(stderr, "%s:", rule.first.c_str());
-			for (auto elem : rule.second.m_elems)
+			for (auto elem : rule.second.elems())
 			{
 				print_elem_debug(elem);
 			}
@@ -202,26 +219,26 @@ public:
 	// ------------------------------------------------------------------------
 	void print_elem_debug(Elem &elem, uint32_t depth = 0)
 	{
-		if (elem.m_sub_elems.size() > 0)
+		if (elem.sub_elems().size() > 0)
 		{
 			std::string tabs(depth, '\t');
-			if (ElemType::ALT == elem.m_type) fprintf(stderr, "\n%s|\n", tabs.c_str());
-			else if (ElemType::GROUP == elem.m_type) fprintf(stderr, "\n%s(\n", tabs.c_str());
+			if (ElemType::ALT == elem.type()) fprintf(stderr, "\n%s|\n", tabs.c_str());
+			else if (ElemType::GROUP == elem.type()) fprintf(stderr, "\n%s(\n", tabs.c_str());
 			fprintf(stderr, "%s", tabs.c_str());
-			for (auto sub_elem : elem.m_sub_elems)
+			for (auto sub_elem : elem.sub_elems())
 			{
 				print_elem_debug(sub_elem, depth + 1);
 			}
-			if (ElemType::GROUP == elem.m_type) fprintf(stderr, "\n%s)\n", tabs.c_str());
+			if (ElemType::GROUP == elem.type()) fprintf(stderr, "\n%s)\n", tabs.c_str());
 		}
 		else
 		{
-			for (auto str : elem.m_text)
+			for (auto str : elem.text())
 			{
 				fprintf(stderr, " %s", str.c_str());
 			}
 		}
-		fprintf(stderr, "%s", elem.m_quantifier_strs[elem.m_quantifier].c_str());
+		fprintf(stderr, "%s", elem.quantifier_strs()[elem.quantifier()].c_str());
 	}
 
 	// ------------------------------------------------------------------------
@@ -292,7 +309,7 @@ public:
 	}
 )foo");
 
-		for (auto rule : m_grammar.m_rules) print_rule(rule.second);
+		for (auto rule : m_grammar.rules()) print_rule(rule.second);
 
 		printf(
 R"foo(
@@ -349,7 +366,7 @@ int main(int argc, char **argv)
 	delete[] buf;
 	return 0;
 }
-)foo", m_grammar.m_rule_root.c_str());
+)foo", m_grammar.rule_root().c_str());
 	}
 
 	// ------------------------------------------------------------------------
@@ -357,16 +374,16 @@ int main(int argc, char **argv)
 	{
 		printf("\n");
 		printf("\t// ***RULE*** %s\n", rule.to_string().c_str());
-		printf("\tint32_t parse_%s(CSTNode &parent)\n", rule.m_name.c_str());
+		printf("\tint32_t parse_%s(CSTNode &parent)\n", rule.name().c_str());
 		printf("\t{\n");
-		printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.m_name.c_str());
+		printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.name().c_str());
 		printf("\t\tuint32_t pos_prev = m_pos;\n");
 		printf("\t\tuint32_t col_prev = m_col;\n");
 		printf("\t\tuint32_t line_prev = m_line;\n");
-		printf("\t\tCSTNode cstn0(m_pos, \"%s\");\n", rule.m_name.c_str());
+		printf("\t\tCSTNode cstn0(m_pos, \"%s\");\n", rule.name().c_str());
 		printf("\n");
 
-		print_alts(rule.m_elems);
+		print_alts(rule.elems());
 
 		printf("\n");
 		printf("\t\tif (!ok0)\n");
@@ -379,7 +396,7 @@ int main(int argc, char **argv)
 		printf("\t\t\tm_line = line_prev;\n");
 		printf("\t\t}\n");
 		// only add to CST if neither discard nor inline modification set
-		if ("discard" != rule.m_mod && "inline" != rule.m_mod)
+		if ("discard" != rule.mod() && "inline" != rule.mod())
 		{
 			printf("\t\telse\n");
 			printf("\t\t{\n");
@@ -387,7 +404,7 @@ int main(int argc, char **argv)
 			printf("\t\t}\n");
 		}
 		std::string ret_str = "RET_OK";
-		if ("inline" == rule.m_mod) ret_str = "RET_INLINE";
+		if ("inline" == rule.mod()) ret_str = "RET_INLINE";
 		printf("\t\tif (ok0) return %s;\n", ret_str.c_str());
 		printf("\t\telse return RET_FAIL;\n");
 		printf("\t}\n");
@@ -439,7 +456,7 @@ int main(int argc, char **argv)
 	void print_alt(Elem &elem, uint32_t depth = 0)
 	{
 		// sanity check
-		if (ElemType::ALT != elem.m_type) return;
+		if (ElemType::ALT != elem.type()) return;
 
 		std::string tabs(depth + 2, '\t');
 
@@ -450,11 +467,11 @@ int main(int argc, char **argv)
 		printf("%s\tuint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
 		printf("\n");
 
-		size_t n_elems = elem.m_sub_elems.size();
+		size_t n_elems = elem.sub_elems().size();
 		for (size_t e = 0; e < n_elems; e++)
 		{
 			if (e > 0) printf("\n");
-			print_elem(elem.m_sub_elems[e], depth + 1);
+			print_elem(elem.sub_elems()[e], depth + 1);
 		}
 
 		printf("\n");
@@ -468,13 +485,13 @@ int main(int argc, char **argv)
 	void print_elem(Elem &elem, uint32_t depth = 0)
 	{
 		// sanity check
-		if (ElemType::ALT == elem.m_type) return;
+		if (ElemType::ALT == elem.type()) return;
 
 		std::string tabs(depth + 2, '\t');
 
 		printf("%s// ***ELEMENT***%s\n", tabs.c_str(), elem.to_string().c_str());
 
-		if (elem.m_quantifier == QuantifierType::ZERO_ONE)
+		if (elem.quantifier() == QuantifierType::ZERO_ONE)
 		{
 			printf("%sok%d = false;\n", tabs.c_str(), depth - 1);
 			printf("%sfor (;;)\n", tabs.c_str());
@@ -485,7 +502,7 @@ int main(int argc, char **argv)
 			printf("%s\tbreak;\n", tabs.c_str());
 			printf("%s}\n", tabs.c_str());
 		}
-		else if (elem.m_quantifier == QuantifierType::ZERO_PLUS)
+		else if (elem.quantifier() == QuantifierType::ZERO_PLUS)
 		{
 			printf("%sok%d = false;\n", tabs.c_str(), depth - 1);
 			printf("%sfor (;;)\n", tabs.c_str());
@@ -501,7 +518,7 @@ int main(int argc, char **argv)
 			printf("%s\tbreak;\n", tabs.c_str());
 			printf("%s}\n", tabs.c_str());
 		}
-		else if (elem.m_quantifier == QuantifierType::ONE_PLUS)
+		else if (elem.quantifier() == QuantifierType::ONE_PLUS)
 		{
 			printf("%sok%d = false;\n", tabs.c_str(), depth - 1);
 			printf("%sint32_t counter%d = 0;\n", tabs.c_str(), depth);
@@ -514,7 +531,7 @@ int main(int argc, char **argv)
 			printf("%s}\n", tabs.c_str());
 			printf("%sok%d = (counter%d > 0);\n", tabs.c_str(), depth - 1, depth);
 		}
-		else if (elem.m_quantifier == QuantifierType::ONE)
+		else if (elem.quantifier() == QuantifierType::ONE)
 		{
 			printf("%sok%d = false;\n", tabs.c_str(), depth - 1);
 			printf("%sfor (;;)\n", tabs.c_str());
@@ -527,7 +544,7 @@ int main(int argc, char **argv)
 		}
 		else
 		{
-			uint32_t qt = (uint32_t)elem.m_quantifier;
+			uint32_t qt = (uint32_t)elem.quantifier();
 			fprintf(stderr, "FATAL ERROR: unsupported quantifier '%u'\n", qt);
 			exit(1);
 		}
@@ -540,10 +557,10 @@ int main(int argc, char **argv)
 	{
 		std::string tabs(depth + 3, '\t');
 
-		if (ElemType::NAME == elem.m_type)
+		if (ElemType::NAME == elem.type())
 		{
-			printf("%sint32_t ok%d = parse_%s(cstn%d);\n", tabs.c_str(), depth, elem.m_text[0].c_str(), depth - 2);
-			if ("inline" == m_grammar.m_rules[elem.m_text[0]].m_mod)
+			printf("%sint32_t ok%d = parse_%s(cstn%d);\n", tabs.c_str(), depth, elem.text()[0].c_str(), depth - 2);
+			if ("inline" == m_grammar.rules()[elem.text()[0]].mod())
 			{
 				printf("%sif (RET_INLINE == ok%d)\n", tabs.c_str(), depth);
 				printf("%s{\n", tabs.c_str());
@@ -554,7 +571,7 @@ int main(int argc, char **argv)
 			}
 		}
 		// NOTE: assumes valid expression since parser should have validated
-		else if (ElemType::CH_CLASS == elem.m_type)
+		else if (ElemType::CH_CLASS == elem.type())
 		{
 			printf("%sbool ok%d = false;\n", tabs.c_str(), depth);
 			printf("%sint32_t ch_decoded;\n", tabs.c_str());
@@ -564,7 +581,7 @@ int main(int argc, char **argv)
 			bool flag_negate_all = false;
 			int32_t range_ch1;
 			int32_t range_ch2;
-			int32_t ch32 = decode_to_int32((char *)elem.m_text[idx].c_str());
+			int32_t ch32 = decode_to_int32((char *)elem.text()[idx].c_str());
 			if ('^' == ch32)
 			{
 				flag_negate_all = true;
@@ -576,12 +593,12 @@ int main(int argc, char **argv)
 
 			// negative expressions
 			// loop over all tokens except leading and trailing [ ]
-			for (int32_t idx2 = idx; idx2 < elem.m_text.size() - 1;)
+			for (int32_t idx2 = idx; idx2 < elem.text().size() - 1;)
 			{
 				bool flag_is_range = false;
 
 				bool flag_negate = false;
-				ch32 = decode_to_int32((char *)elem.m_text[idx2].c_str());
+				ch32 = decode_to_int32((char *)elem.text()[idx2].c_str());
 				// check for negation
 				if ('!' == ch32)
 				{
@@ -589,15 +606,15 @@ int main(int argc, char **argv)
 					idx2++;
 				}
 				// get first char in range
-				range_ch1 = decode_to_int32((char *)elem.m_text[idx2].c_str());
+				range_ch1 = decode_to_int32((char *)elem.text()[idx2].c_str());
 				idx2++;
-				ch32 = decode_to_int32((char *)elem.m_text[idx2].c_str());
+				ch32 = decode_to_int32((char *)elem.text()[idx2].c_str());
 				// check for range 
 				if ('-' == ch32)
 				{
 					flag_is_range = true;
 					idx2++;
-					range_ch2 = decode_to_int32((char *)elem.m_text[idx2].c_str());
+					range_ch2 = decode_to_int32((char *)elem.text()[idx2].c_str());
 					idx2++;
 				}
 
@@ -620,12 +637,12 @@ int main(int argc, char **argv)
 			// positive expressions
 			// loop over all tokens except leading and trailing [ ]
 			printf(" && (false");
-			for (; idx < elem.m_text.size() - 1;)
+			for (; idx < elem.text().size() - 1;)
 			{
 				bool flag_is_range = false;
 
 				bool flag_negate = false;
-				ch32 = decode_to_int32((char *)elem.m_text[idx].c_str());
+				ch32 = decode_to_int32((char *)elem.text()[idx].c_str());
 				// check for negation
 				if ('!' == ch32)
 				{
@@ -633,15 +650,15 @@ int main(int argc, char **argv)
 					idx++;
 				}
 				// get first char in range
-				range_ch1 = decode_to_int32((char *)elem.m_text[idx].c_str());
+				range_ch1 = decode_to_int32((char *)elem.text()[idx].c_str());
 				idx++;
-				ch32 = decode_to_int32((char *)elem.m_text[idx].c_str());
+				ch32 = decode_to_int32((char *)elem.text()[idx].c_str());
 				// check for range 
 				if ('-' == ch32)
 				{
 					flag_is_range = true;
 					idx++;
-					range_ch2 = decode_to_int32((char *)elem.m_text[idx].c_str());
+					range_ch2 = decode_to_int32((char *)elem.text()[idx].c_str());
 					idx++;
 				}
 
@@ -675,10 +692,10 @@ int main(int argc, char **argv)
 			printf("%s\t}\n", tabs.c_str());
 			printf("%s}\n", tabs.c_str());
 		}
-		else if (ElemType::STRING == elem.m_type)
+		else if (ElemType::STRING == elem.type())
 		{
 			printf("%sbool ok%d = false;\n", tabs.c_str(), depth);
-			printf("%sconst char *str = %s;\n", tabs.c_str(), elem.m_text[0].c_str());
+			printf("%sconst char *str = %s;\n", tabs.c_str(), elem.text()[0].c_str());
 			printf("%sint32_t i = 0;\n", tabs.c_str());
 			printf("%sfor (; i < strlen(str) && m_text[m_pos] == str[i]; i++, m_pos++, m_col++);\n", tabs.c_str());
 			printf("%sif (i == strlen(str)) ok%d = true;\n", tabs.c_str(), depth);
@@ -690,14 +707,14 @@ int main(int argc, char **argv)
 			printf("%s\tcstn%d.add_child(cstn%d);\n", tabs.c_str(), depth - 2, depth);
 			printf("%s}\n", tabs.c_str());
 		}
-		else if (ElemType::GROUP == elem.m_type)
+		else if (ElemType::GROUP == elem.type())
 		{
 			printf("%sint32_t len_item%d = -1;\n", tabs.c_str(), depth);
-			print_alts(elem.m_sub_elems, depth);
+			print_alts(elem.sub_elems(), depth);
 		}
 		else
 		{
-			fprintf(stderr, "FATAL ERROR: unsupported element type: %d\n", (int)elem.m_type);
+			fprintf(stderr, "FATAL ERROR: unsupported element type: %d\n", (int)elem.type());
 			exit(1);
 		}
 	}
@@ -711,9 +728,9 @@ int main(int argc, char **argv)
 		std::map<std::string, bool> &to_visit_new,
 		std::map<std::string, bool> &visited)
 	{
-		if (ElemType::NAME == elem.m_type)
+		if (ElemType::NAME == elem.type())
 		{
-			std::string elem_name = elem.m_text[0];
+			std::string elem_name = elem.text()[0];
 			// add to to_visit_new list
 			if (to_visit.find(elem_name) == to_visit.end()
 				&& visited.find(elem_name) == visited.end())
@@ -722,9 +739,9 @@ int main(int argc, char **argv)
 			}
 		}
 		// if there are sub elems to this elem, loop over them
-		if (elem.m_sub_elems.size() > 0)
+		if (elem.sub_elems().size() > 0)
 		{
-			for (auto sub_elem : elem.m_sub_elems)
+			for (auto sub_elem : elem.sub_elems())
 			{
 				check_rule_elems(sub_elem, to_visit, to_visit_new, visited);
 			}
@@ -742,7 +759,7 @@ int main(int argc, char **argv)
 		std::map<std::string, bool> to_visit;
 		std::map<std::string, bool> visited;
 		// initialize to_visit map with root rule
-		to_visit[m_grammar.m_rule_root] = true;
+		to_visit[m_grammar.rule_root()] = true;
 		// loop until to_visit list is empty
 		while (to_visit.size() > 0)
 		{
@@ -754,16 +771,16 @@ int main(int argc, char **argv)
 				std::string rule_name = rule.first;
 				visited[rule_name] = true;
 
-				if (m_grammar.m_rules.find(rule_name) == m_grammar.m_rules.end())
+				if (m_grammar.rules().find(rule_name) == m_grammar.rules().end())
 				{
 					fprintf(stderr, "ERROR: undefined rule '%s'\n", rule_name.c_str());
 					retval = false;
 				}
 
 				// loop over child elems
-				for (int i = 0; i < m_grammar.m_rules[rule_name].m_elems.size(); i++)
+				for (int i = 0; i < m_grammar.rules()[rule_name].elems().size(); i++)
 				{
-					Elem &elem = m_grammar.m_rules[rule_name].m_elems[i];
+					Elem &elem = m_grammar.rules()[rule_name].elems()[i];
 					check_rule_elems(elem, to_visit, to_visit_new, visited);
 				}
 			}
@@ -783,10 +800,10 @@ int main(int argc, char **argv)
 			}
 		}
 		// error if not all visited
-		if (m_grammar.m_rules.size() > visited.size())
+		if (m_grammar.rules().size() > visited.size())
 		{
 			// print unreachable rules
-			for (auto rule : m_grammar.m_rules)
+			for (auto rule : m_grammar.rules())
 			{
 				std::string rule_name = rule.first;
 				auto it = visited.find(rule_name);
@@ -803,19 +820,19 @@ int main(int argc, char **argv)
 		//~ visited.clear();
 		//~ std::map<std::string, bool> to_visit_new;
 		//~ // loop over rules
-		//~ for (auto rule : m_grammar.m_rules)
+		//~ for (auto rule : m_grammar.rules())
 		//~ {
 			//~ fprintf(stderr, "!!! %s\n", rule.first.c_str());
 			//~ // loop over child elems
-			//~ for (int i = 0; i < rule.second.m_elems.size(); i++)
+			//~ for (int i = 0; i < rule.second.elems().size(); i++)
 			//~ {
-				//~ Elem &elem = rule.second.m_elems[i];
+				//~ Elem &elem = rule.second.elems()[i];
 				//~ check_rule_elems(elem, to_visit, to_visit_new, visited);
 				//~ fprintf(stderr, "@@@ %s %lu\n", rule.first.c_str(), to_visit_new.size());
 				//~ for (auto named_elem : to_visit_new)
 				//~ {
 					//~ fprintf(stderr, "\t### %s\n", named_elem.first.c_str());
-					//~ if (m_grammar.m_rules.find(named_elem.first) == m_grammar.m_rules.end())
+					//~ if (m_grammar.rules().find(named_elem.first) == m_grammar.rules().end())
 					//~ {
 						//~ fprintf(stderr, "ERROR: undefined rule name '%s'\n", named_elem.first.c_str());
 						//~ retval = false;
@@ -855,15 +872,15 @@ int main(int argc, char **argv)
 
 		std::string rule_name(&m_text[m_pos - len_name], len_name);
 		// first parsed rule is root of grammar
-		if ("" == m_grammar.m_rule_root) m_grammar.m_rule_root = rule_name;
+		if ("" == m_grammar.rule_root()) m_grammar.rule_root() = rule_name;
 
-		if (m_grammar.m_rules.find(rule_name) != m_grammar.m_rules.end())
+		if (m_grammar.rules().find(rule_name) != m_grammar.rules().end())
 		{
 			fprintf(stderr, "ERROR: duplicate rule name '%s'\n", rule_name.c_str());
 			return false;
 		}
 
-		m_grammar.m_rules[rule_name] = Rule(rule_name);
+		m_grammar.rules()[rule_name] = Rule(rule_name);
 
 		parse_ws();
 
@@ -873,7 +890,7 @@ int main(int argc, char **argv)
 		{
 			std::string rule_mod(&m_text[m_pos - len_mod], len_mod);
 			if ("discard" != rule_mod && "inline" != rule_mod) return false;
-			m_grammar.m_rules[rule_name].m_mod = rule_mod;
+			m_grammar.rules()[rule_name].mod() = rule_mod;
 		}
 
 		parse_ws();
@@ -884,7 +901,7 @@ int main(int argc, char **argv)
 
 		parse_ws();
 
-		int32_t len_alts = parse_alts(m_grammar.m_rules[rule_name].m_elems);
+		int32_t len_alts = parse_alts(m_grammar.rules()[rule_name].elems());
 		if (-1 == len_alts) return false;
 
 		parse_ws();
@@ -965,7 +982,7 @@ private:
 		while (m_text[m_pos] != '\0')
 		{
 			Elem elem_alt(ElemType::ALT);
-			int32_t len_el = parse_alt(elem_alt.m_sub_elems);
+			int32_t len_el = parse_alt(elem_alt.sub_elems());
 			if (-1 == len_el) break;
 			len += len_el;
 			trailing_bar = false;
@@ -1061,7 +1078,7 @@ private:
 				if (ch == '?') qt = QuantifierType::ZERO_ONE;
 				else if (ch == '*') qt = QuantifierType::ZERO_PLUS;
 				else if (ch == '+') qt = QuantifierType::ONE_PLUS;
-				elems[elems.size() - 1].m_quantifier = qt;
+				elems[elems.size() - 1].quantifier() = qt;
 				m_pos++;
 				m_col++;
 				len++;
@@ -1102,7 +1119,7 @@ private:
 
 		parse_ws();
 
-		int32_t len_alts = parse_alts(elem_group.m_sub_elems);
+		int32_t len_alts = parse_alts(elem_group.sub_elems());
 		if (len_alts < 0)
 		{
 			pos_prev = m_pos;
@@ -1194,7 +1211,7 @@ private:
 		}
 
 		Elem elem(ElemType::CH_CLASS);
-		elem.m_text.push_back("[");
+		elem.text().push_back("[");
 
 		m_pos++;
 		m_col++;
@@ -1204,7 +1221,7 @@ private:
 		// optional logical not for entire expression
 		if (ch == '^')
 		{
-			elem.m_text.push_back("^");
+			elem.text().push_back("^");
 			m_pos++;
 			m_col++;
 			len++;
@@ -1238,7 +1255,7 @@ private:
 			// optional logical not for this range
 			if (ch == '!')
 			{
-				elem.m_text.push_back("!");
+				elem.text().push_back("!");
 				m_pos++;
 				m_col++;
 				len_range++;
@@ -1253,7 +1270,7 @@ private:
 				m_line = line_prev_range;
 				for (int32_t i = 0; i < valid_range_elements; i++)
 				{
-					elem.m_text.pop_back();
+					elem.text().pop_back();
 				}
 				break;
 			}
@@ -1270,7 +1287,7 @@ private:
 		}
 		else
 		{
-			elem.m_text.push_back("]");
+			elem.text().push_back("]");
 			elems.push_back(elem);
 			m_pos++;
 			m_col++;
@@ -1299,7 +1316,7 @@ private:
 		// disallow unescaped reserved character
 		if (len_char == 1)
 		{
-			ch = elem.m_text[elem.m_text.size() - 1][0];
+			ch = elem.text()[elem.text().size() - 1][0];
 			for (int32_t i = 0; ch_class_reserve_chars[i] != '\0'; i++)
 			{
 				if (ch == ch_class_reserve_chars[i])
@@ -1314,7 +1331,7 @@ private:
 
 		ch = m_text[m_pos];
 		if (ch != '-') return len;
-		elem.m_text.push_back(std::string(&m_text[m_pos], 1));
+		elem.text().push_back(std::string(&m_text[m_pos], 1));
 		m_pos++;
 		m_col++;
 		len++;
@@ -1333,6 +1350,16 @@ private:
 			{
 				if (ch == ch_class_reserve_chars[i]) return -1;
 			}
+		}
+
+		// error if first element >= second one
+		std::string ch1 = elem.text()[1];
+		std::string ch2 = elem.text()[3];
+		if (decode_to_int32(ch1.c_str()) >= decode_to_int32(ch2.c_str()))
+		{
+			fprintf(stderr, "ERROR: invalid range [%s-%s]: '%s' is not < '%s'\n",
+				ch1.c_str(), ch2.c_str(), ch1.c_str(), ch2.c_str());
+			return -1;
 		}
 
 		len += len_char;
@@ -1357,7 +1384,7 @@ private:
 		{
 			int32_t len = parse_utf8_char();
 			if (len < 0) return -1;
-			elem.m_text.push_back(std::string(&m_text[m_pos], len));
+			elem.text().push_back(std::string(&m_text[m_pos], len));
 			m_pos += len;
 			m_col += len;
 			return len;
@@ -1376,7 +1403,7 @@ private:
 		// 1 byte UTF-8 character
 		if (!is_esc)
 		{
-			elem.m_text.push_back(std::string(&m_text[m_pos], 1));
+			elem.text().push_back(std::string(&m_text[m_pos], 1));
 			m_pos++;
 			m_col++;
 			return 1;
@@ -1389,7 +1416,7 @@ private:
 			{
 				m_pos++;
 				m_col++;
-				elem.m_text.push_back(std::string(&m_text[m_pos - 2], 2));
+				elem.text().push_back(std::string(&m_text[m_pos - 2], 2));
 				return 2;
 			}
 		}
@@ -1402,7 +1429,7 @@ private:
 			int32_t i = 0;
 			for (; i < 4 && is_hex_char(m_text[m_pos]); i++, m_pos++, m_col++);
 			if (i < 4) return -1;
-			elem.m_text.push_back(std::string(&m_text[m_pos - 6], 6));
+			elem.text().push_back(std::string(&m_text[m_pos - 6], 6));
 			return 6;
 		}
 
@@ -1414,7 +1441,7 @@ private:
 			int32_t i = 0;
 			for (; i < 8 && is_hex_char(m_text[m_pos]); i++, m_pos++, m_col++);
 			if (i < 8) return -1;
-			elem.m_text.push_back(std::string(&m_text[m_pos - 10], 10));
+			elem.text().push_back(std::string(&m_text[m_pos - 10], 10));
 			return 10;
 		}
 
@@ -1443,7 +1470,7 @@ private:
 
 	// ------------------------------------------------------------------------
 	// returns extracted code bits from utf-8 on success or -1 on failure
-	int32_t utf8_to_int32(char *str)
+	int32_t utf8_to_int32(const char *str)
 	{
 		int32_t n_bytes;
 		uint8_t byte = (uint8_t)str[0];
@@ -1472,7 +1499,7 @@ private:
 	// esc inline : [\!\-\[\\\]\^abfnrtv] | unicode;
 	// unicode inline : "u" hex hex hex hex | "U00" hex hex hex hex hex hex;
 	// hex inline : [0-9A-Fa-f];
-	int32_t esc_to_int32(char *str)
+	int32_t esc_to_int32(const char *str)
 	{
 		uint32_t i = 0;
 		if (str[i] != '\\') return -1;
@@ -1499,7 +1526,7 @@ private:
 	}
 
 	// ------------------------------------------------------------------------
-	int32_t decode_to_int32(char *str)
+	int32_t decode_to_int32(const char *str)
 	{
 		if (str[0] == '\\') return esc_to_int32(str);
 		else return utf8_to_int32(str);
@@ -1516,7 +1543,7 @@ private:
 	// ------------------------------------------------------------------------
 	// convert hex string of 4 or 8 characters to int32_t
 	// returns value on success or -1 on failure
-	int32_t hex_to_int32(char *str, int32_t len)
+	int32_t hex_to_int32(const char *str, int32_t len)
 	{
 		if (len != 4 && len != 8) return -1;
 		int32_t val = 0;
