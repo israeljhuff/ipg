@@ -6,7 +6,7 @@
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: vector instead of map for rule list?
 
-// TODO: new rule mod to exclude parent, but not children, from AST
+// TODO: rename CST to AST since rules can have modifiers that affect generated tree
 
 #include <cstdint>
 #include <cstdio>
@@ -380,7 +380,14 @@ int main(int argc, char **argv)
 		printf("\t\tuint32_t pos_prev = m_pos;\n");
 		printf("\t\tuint32_t col_prev = m_col;\n");
 		printf("\t\tuint32_t line_prev = m_line;\n");
-		printf("\t\tCSTNode cstn0(m_pos, \"%s\");\n", rule.name().c_str());
+		if ("mergeup" == rule.mod())
+		{
+			printf("\t\tCSTNode &cstn0 = parent;\n");
+		}
+		else
+		{
+			printf("\t\tCSTNode cstn0(m_pos, \"%s\");\n", rule.name().c_str());
+		}
 		printf("\n");
 
 		print_alts(rule.elems());
@@ -395,8 +402,8 @@ int main(int argc, char **argv)
 		printf("\t\t\tm_col = col_prev;\n");
 		printf("\t\t\tm_line = line_prev;\n");
 		printf("\t\t}\n");
-		// only add to CST if neither discard nor inline modification set
-		if ("discard" != rule.mod() && "inline" != rule.mod())
+		// only add to CST if discard, inline and mergeup modifications not set
+		if ("discard" != rule.mod() && "inline" != rule.mod() && "mergeup" != rule.mod())
 		{
 			printf("\t\telse\n");
 			printf("\t\t{\n");
@@ -861,7 +868,7 @@ int main(int argc, char **argv)
 	}
 
 	// ------------------------------------------------------------------------
-	// rule : ws id ws ("discard" | "inline")? ws ":" ws alts ws ";" ws;
+	// rule : ws id ws ("discard" | "inline" | "mergeup")? ws ":" ws alts ws ";" ws;
 	bool parse_rule(CSTNode &node_w)
 	{
 		if (SCC_DEBUG) fprintf(stderr, "parse_rule %d\n", m_pos);
@@ -889,7 +896,7 @@ int main(int argc, char **argv)
 		if (len_mod > 0)
 		{
 			std::string rule_mod(&m_text[m_pos - len_mod], len_mod);
-			if ("discard" != rule_mod && "inline" != rule_mod) return false;
+			if ("discard" != rule_mod && "inline" != rule_mod && "mergeup" != rule_mod) return false;
 			m_grammar.rules()[rule_name].mod() = rule_mod;
 		}
 
@@ -1027,7 +1034,7 @@ private:
 	}
 
 	// ------------------------------------------------------------------------
-	// elem : (group | id | ch_class | string) [?*+]?;
+	// elem mergeup: (group | id | ch_class | string) [?*+]?;
 	// returns length on success, -1 on failure
 	int32_t parse_element(std::vector<Elem> &elems)
 	{

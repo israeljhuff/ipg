@@ -9,7 +9,7 @@ id_chars            inline : [A-Za-z][0-9A-Za-z_]*;
 alts                       : alt (alts_sep alt)*;
 alts_sep           discard : ws "|" ws;
 alt                        : elem (ws elem)*;
-elem                       : (group | id | ch_class | string) [?*+]?;
+elem               mergeup : (group | id | ch_class | string) [?*+]?;
 group                      : group_open alts group_close;
 group_open         discard : "(" ws;
 group_close        discard : ws ")";
