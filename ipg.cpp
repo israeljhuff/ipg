@@ -6,7 +6,7 @@
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: vector instead of map for rule list?
 
-// TODO: rename CST to AST since rules can have modifiers that affect generated tree
+// TODO: add ability to comment (everything after a #?)
 
 #include <cstdint>
 #include <cstdio>
@@ -33,27 +33,29 @@ enum class QuantifierType : uint32_t
 };
 
 // ----------------------------------------------------------------------------
-// concrete syntax tree node
-class CSTNode
+// abstract syntax tree node
+class ASTNode
 {
 public:
-	CSTNode() {}
-	CSTNode(uint32_t pos, std::string text) { m_pos = pos; m_text = text; }
+	ASTNode() {}
+	ASTNode(uint32_t pos, std::string text) { m_pos = pos; m_text = text; }
 	void clear() { m_pos = 0; m_text.clear(); m_children.clear(); }
 	uint32_t pos() { return m_pos; }
 	std::string text() { return m_text; }
-	void add_child(CSTNode &child) { m_children.push_back(child); }
-    CSTNode &child(uint32_t index) { return m_children[index]; }
-	std::vector<CSTNode> &children() { return m_children; }
+	void add_child(ASTNode &child) { m_children.push_back(child); }
+    ASTNode &child(uint32_t index) { return m_children[index]; }
+	std::vector<ASTNode> &children() { return m_children; }
 	void print(uint32_t depth = 0)
 	{
-		printf("%s%s\n", std::string(depth, ' ').c_str(), m_text.c_str());
+		printf("%s%s", std::string(depth * 2, ' ').c_str(), m_text.c_str());
+		if (m_children.size() > 0) printf(": %lu", m_children.size());
+		printf("\n");
 		for (auto child : m_children) child.print(depth + 1);
 	}
 private:
 	uint32_t m_pos = 0;
 	std::string m_text;
-	std::vector<CSTNode> m_children;
+	std::vector<ASTNode> m_children;
 };
 
 // ----------------------------------------------------------------------------
@@ -259,26 +261,28 @@ R"foo(
 #define RET_OK 1
 #define RET_INLINE 2
 
-class CSTNode
+class ASTNode
 {
 public:
-	CSTNode() {}
-	CSTNode(uint32_t pos, std::string text) { m_pos = pos; m_text = text; }
+	ASTNode() {}
+	ASTNode(uint32_t pos, std::string text) { m_pos = pos; m_text = text; }
 	void clear() { m_pos = 0; m_text.clear(); m_children.clear(); }
 	uint32_t pos() { return m_pos; }
 	std::string text() { return m_text; }
-	void add_child(CSTNode &child) { m_children.push_back(child); }
-    CSTNode &child(uint32_t index) { return m_children[index]; }
-	std::vector<CSTNode> &children() { return m_children; }
+	void add_child(ASTNode &child) { m_children.push_back(child); }
+    ASTNode &child(uint32_t index) { return m_children[index]; }
+	std::vector<ASTNode> &children() { return m_children; }
 	void print(uint32_t depth = 0)
 	{
-		printf("%%s/%%s/ %%lu\n", std::string(depth * 2, ' ').c_str(), m_text.c_str(), m_children.size());
+		printf("%%s%%s", std::string(depth * 2, ' ').c_str(), m_text.c_str());
+		if (m_children.size() > 0) printf(": %%lu", m_children.size());
+		printf("\n");
 		for (auto child : m_children) child.print(depth + 1);
 	}
 private:
 	uint32_t m_pos = 0;
 	std::string m_text;
-	std::vector<CSTNode> m_children;
+	std::vector<ASTNode> m_children;
 };
 
 class Parser
@@ -354,12 +358,12 @@ int main(int argc, char **argv)
 	buf[file_len] = '\0';
 	size_t bytes_read = fread(buf, 1, file_len, fp);
 	fclose(fp);
-	CSTNode cstn(0, "ROOT");
+	ASTNode astn(0, "ROOT");
 	Parser p(buf);
-	int32_t retval = p.parse_%s(cstn);
+	int32_t retval = p.parse_%s(astn);
 	printf("%%d\n", p.line());
 	printf("%%u %%lu\n", p.pos(), p.len());
-	cstn.print();
+	astn.print();
 	fprintf(stderr, "%%d\n", retval);
 	if (RET_FAIL == retval || p.pos() < p.len()) p.print_last_err();
 	else fprintf(stderr, "parsed successfully\n");
@@ -374,7 +378,7 @@ int main(int argc, char **argv)
 	{
 		printf("\n");
 		printf("\t// ***RULE*** %s\n", rule.to_string().c_str());
-		printf("\tint32_t parse_%s(CSTNode &parent)\n", rule.name().c_str());
+		printf("\tint32_t parse_%s(ASTNode &parent)\n", rule.name().c_str());
 		printf("\t{\n");
 		printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.name().c_str());
 		printf("\t\tuint32_t pos_prev = m_pos;\n");
@@ -382,11 +386,11 @@ int main(int argc, char **argv)
 		printf("\t\tuint32_t line_prev = m_line;\n");
 		if ("mergeup" == rule.mod())
 		{
-			printf("\t\tCSTNode &cstn0 = parent;\n");
+			printf("\t\tASTNode &astn0 = parent;\n");
 		}
 		else
 		{
-			printf("\t\tCSTNode cstn0(m_pos, \"%s\");\n", rule.name().c_str());
+			printf("\t\tASTNode astn0(m_pos, \"%s\");\n", rule.name().c_str());
 		}
 		printf("\n");
 
@@ -402,12 +406,12 @@ int main(int argc, char **argv)
 		printf("\t\t\tm_col = col_prev;\n");
 		printf("\t\t\tm_line = line_prev;\n");
 		printf("\t\t}\n");
-		// only add to CST if discard, inline and mergeup modifications not set
+		// only add to AST if discard, inline and mergeup modifications not set
 		if ("discard" != rule.mod() && "inline" != rule.mod() && "mergeup" != rule.mod())
 		{
 			printf("\t\telse\n");
 			printf("\t\t{\n");
-			printf("\t\t\tparent.add_child(cstn0);\n");
+			printf("\t\t\tparent.add_child(astn0);\n");
 			printf("\t\t}\n");
 		}
 		std::string ret_str = "RET_OK";
@@ -426,7 +430,7 @@ int main(int argc, char **argv)
 		printf("%suint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
 		if (depth > 0)
 		{
-			printf("%sCSTNode cstn%d(m_pos, \"alts_tmp\");\n", tabs.c_str(), depth);
+			printf("%sASTNode astn%d(m_pos, \"alts_tmp\");\n", tabs.c_str(), depth);
 		}
 		printf("%sfor (;;)\n", tabs.c_str());
 		printf("%s{\n", tabs.c_str());
@@ -450,9 +454,9 @@ int main(int argc, char **argv)
 		printf("%s\tprintf(\"*%%s*\\n\", std::string(&m_text[pos_start%d], m_pos - pos_start%d).c_str());\n", tabs.c_str(), depth, depth);
 		if (depth > 0)
 		{
-			printf("%s\tfor (auto child%d : cstn%d.children())\n", tabs.c_str(), depth, depth);
+			printf("%s\tfor (auto child%d : astn%d.children())\n", tabs.c_str(), depth, depth);
 			printf("%s\t{\n", tabs.c_str());
-			printf("%s\t\tcstn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
+			printf("%s\t\tastn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
 			printf("%s\t}\n", tabs.c_str());
 		}
 		//~ printf("%s\tm_errs.clear();\n", tabs.c_str());
@@ -566,14 +570,14 @@ int main(int argc, char **argv)
 
 		if (ElemType::NAME == elem.type())
 		{
-			printf("%sint32_t ok%d = parse_%s(cstn%d);\n", tabs.c_str(), depth, elem.text()[0].c_str(), depth - 2);
+			printf("%sint32_t ok%d = parse_%s(astn%d);\n", tabs.c_str(), depth, elem.text()[0].c_str(), depth - 2);
 			if ("inline" == m_grammar.rules()[elem.text()[0]].mod())
 			{
 				printf("%sif (RET_INLINE == ok%d)\n", tabs.c_str(), depth);
 				printf("%s{\n", tabs.c_str());
-				printf("%s\tCSTNode cstn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
+				printf("%s\tASTNode astn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
 					tabs.c_str(), depth, depth - 1, depth - 1, depth - 1);
-				printf("%s\tcstn%d.add_child(cstn%d);\n", tabs.c_str(), depth - 2, depth);
+				printf("%s\tastn%d.add_child(astn%d);\n", tabs.c_str(), depth - 2, depth);
 				printf("%s}\n", tabs.c_str());
 			}
 		}
@@ -588,8 +592,9 @@ int main(int argc, char **argv)
 			bool flag_negate_all = false;
 			int32_t range_ch1;
 			int32_t range_ch2;
-			int32_t ch32 = decode_to_int32((char *)elem.text()[idx].c_str());
-			if ('^' == ch32)
+			bool escaped = false;
+			int32_t ch32 = decode_to_int32(&escaped, (char *)elem.text()[idx].c_str());
+			if ('^' == ch32 && !escaped)
 			{
 				flag_negate_all = true;
 				idx++;
@@ -605,23 +610,23 @@ int main(int argc, char **argv)
 				bool flag_is_range = false;
 
 				bool flag_negate = false;
-				ch32 = decode_to_int32((char *)elem.text()[idx2].c_str());
+				ch32 = decode_to_int32(&escaped, (char *)elem.text()[idx2].c_str());
 				// check for negation
-				if ('!' == ch32)
+				if ('!' == ch32 && !escaped)
 				{
 					flag_negate = true;
 					idx2++;
 				}
 				// get first char in range
-				range_ch1 = decode_to_int32((char *)elem.text()[idx2].c_str());
+				range_ch1 = decode_to_int32(&escaped, (char *)elem.text()[idx2].c_str());
 				idx2++;
-				ch32 = decode_to_int32((char *)elem.text()[idx2].c_str());
+				ch32 = decode_to_int32(&escaped, (char *)elem.text()[idx2].c_str());
 				// check for range 
-				if ('-' == ch32)
+				if ('-' == ch32 && !escaped)
 				{
 					flag_is_range = true;
 					idx2++;
-					range_ch2 = decode_to_int32((char *)elem.text()[idx2].c_str());
+					range_ch2 = decode_to_int32(&escaped, (char *)elem.text()[idx2].c_str());
 					idx2++;
 				}
 
@@ -649,23 +654,23 @@ int main(int argc, char **argv)
 				bool flag_is_range = false;
 
 				bool flag_negate = false;
-				ch32 = decode_to_int32((char *)elem.text()[idx].c_str());
+				ch32 = decode_to_int32(&escaped, (char *)elem.text()[idx].c_str());
 				// check for negation
-				if ('!' == ch32)
+				if ('!' == ch32 && !escaped)
 				{
 					flag_negate = true;
 					idx++;
 				}
 				// get first char in range
-				range_ch1 = decode_to_int32((char *)elem.text()[idx].c_str());
+				range_ch1 = decode_to_int32(&escaped, (char *)elem.text()[idx].c_str());
 				idx++;
-				ch32 = decode_to_int32((char *)elem.text()[idx].c_str());
+				ch32 = decode_to_int32(&escaped, (char *)elem.text()[idx].c_str());
 				// check for range 
-				if ('-' == ch32)
+				if ('-' == ch32 && !escaped)
 				{
 					flag_is_range = true;
 					idx++;
-					range_ch2 = decode_to_int32((char *)elem.text()[idx].c_str());
+					range_ch2 = decode_to_int32(&escaped, (char *)elem.text()[idx].c_str());
 					idx++;
 				}
 
@@ -689,9 +694,9 @@ int main(int argc, char **argv)
 
 			printf("%sif (ok%d)\n", tabs.c_str(), depth);
 			printf("%s{\n", tabs.c_str());
-			printf("%s\tCSTNode cstn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
+			printf("%s\tASTNode astn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
 				tabs.c_str(), depth, depth - 1, depth - 1, depth - 1);
-			printf("%s\tcstn%d.add_child(cstn%d);\n", tabs.c_str(), depth - 2, depth);
+			printf("%s\tastn%d.add_child(astn%d);\n", tabs.c_str(), depth - 2, depth);
 			printf("%s\tif ('\\n' == ch_decoded)\n", tabs.c_str());
 			printf("%s\t{\n", tabs.c_str());
 			printf("%s\t\tm_line++;\n", tabs.c_str());
@@ -709,9 +714,9 @@ int main(int argc, char **argv)
 
 			printf("%sif (ok%d)\n", tabs.c_str(), depth);
 			printf("%s{\n", tabs.c_str());
-			printf("%s\tCSTNode cstn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
+			printf("%s\tASTNode astn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
 				tabs.c_str(), depth, depth - 1, depth - 1, depth - 1);
-			printf("%s\tcstn%d.add_child(cstn%d);\n", tabs.c_str(), depth - 2, depth);
+			printf("%s\tastn%d.add_child(astn%d);\n", tabs.c_str(), depth - 2, depth);
 			printf("%s}\n", tabs.c_str());
 		}
 		else if (ElemType::GROUP == elem.type())
@@ -854,7 +859,7 @@ int main(int argc, char **argv)
 	}
 
 	// ------------------------------------------------------------------------
-	bool parse_grammar(CSTNode &node_w, const char *text_r)
+	bool parse_grammar(ASTNode &node_w, const char *text_r)
 	{
 		if (SCC_DEBUG) fprintf(stderr, "parse_grammar %d\n", m_pos);
 		node_w.clear();
@@ -869,7 +874,7 @@ int main(int argc, char **argv)
 
 	// ------------------------------------------------------------------------
 	// rule : ws id ws ("discard" | "inline" | "mergeup")? ws ":" ws alts ws ";" ws;
-	bool parse_rule(CSTNode &node_w)
+	bool parse_rule(ASTNode &node_w)
 	{
 		if (SCC_DEBUG) fprintf(stderr, "parse_rule %d\n", m_pos);
 		parse_ws();
@@ -1362,7 +1367,8 @@ private:
 		// error if first element >= second one
 		std::string ch1 = elem.text()[1];
 		std::string ch2 = elem.text()[3];
-		if (decode_to_int32(ch1.c_str()) >= decode_to_int32(ch2.c_str()))
+		bool escaped = false;
+		if (decode_to_int32(&escaped, ch1.c_str()) >= decode_to_int32(&escaped, ch2.c_str()))
 		{
 			fprintf(stderr, "ERROR: invalid range [%s-%s]: '%s' is not < '%s'\n",
 				ch1.c_str(), ch2.c_str(), ch1.c_str(), ch2.c_str());
@@ -1533,10 +1539,15 @@ private:
 	}
 
 	// ------------------------------------------------------------------------
-	int32_t decode_to_int32(const char *str)
+	int32_t decode_to_int32(bool *escaped, const char *str)
 	{
-		if (str[0] == '\\') return esc_to_int32(str);
-		else return utf8_to_int32(str);
+		if (str[0] == '\\')
+		{
+			*escaped = true;
+			return esc_to_int32(str);
+		}
+	*escaped = false;
+		return utf8_to_int32(str);
 	}
 
 	// ------------------------------------------------------------------------
@@ -1572,7 +1583,7 @@ private:
 int main(int argc, char **argv)
 {
 	IPG::ParseGen pg;
-	IPG::CSTNode node;
+	IPG::ASTNode node;
 
 	if (argc < 2)
 	{

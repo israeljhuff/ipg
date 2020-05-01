@@ -1,6 +1,6 @@
 rules                      : ws rule+ ws;
 rule                       : ws id ws rule_mod rule_sep alts rule_end;
-rule_mod                   : ("discard" | "inline")?;
+rule_mod                   : ("discard" | "inline" | "mergeup")?;
 rule_sep           discard : ws ":" ws;
 rule_end           discard : ws ";" ws;
 ws                 discard : [ \n\r\t]*;
@@ -25,6 +25,6 @@ ch_class_range             : ch_class_range_neg? ch_class_char (ch_class_range_s
 ch_class_range_neg         : "!";
 ch_class_range_sep discard : "-";
 ch_class_char       inline : [\u0020-\U0010ffff!\\!\]] | esc;
-esc                 inline : "\\" ([\!\-\[\\\]\^abfnrtv] | unicode);
+esc                 inline : "\\" ([\!"\-\[\\\]\^abfnrtv] | unicode);
 unicode             inline : "u" hex hex hex hex | "U00" hex hex hex hex hex hex;
 hex                 inline : [0-9A-Fa-f];
