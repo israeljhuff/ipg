@@ -1,3 +1,7 @@
+// Israel's Parser Generator (IPG)
+// Author: Israel Huff
+// https://github.com/israeljhuff/ipg
+
 // g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
 
@@ -5,8 +9,6 @@
 // TODO: when parsing a rule (or alts?), only clear errors that occurred before it
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
 // TODO: vector instead of map for rule list?
-
-// TODO: add ability to comment (everything after a #?)
 
 #include <cstdint>
 #include <cstdio>
@@ -859,21 +861,34 @@ int main(int argc, char **argv)
 	}
 
 	// ------------------------------------------------------------------------
+	// rules : ws (comment ws)* rule+;
 	bool parse_grammar(ASTNode &node_w, const char *text_r)
 	{
 		if (SCC_DEBUG) fprintf(stderr, "parse_grammar %d\n", m_pos);
 		node_w.clear();
 		m_text = text_r;
+
+		parse_ws();
+		uint32_t m_pos_prev;
+		do
+		{
+			m_pos_prev = m_pos;
+			parse_comment();
+			parse_ws();
+		}
+		while (m_text[m_pos] != '\0' && m_pos_prev != m_pos);
+
 		while (m_text[m_pos] != '\0')
 		{
 			bool ok = parse_rule(node_w);
 			if (!ok) return false;
 		}
+
 		return true;
 	}
 
 	// ------------------------------------------------------------------------
-	// rule : ws id ws ("discard" | "inline" | "mergeup")? ws ":" ws alts ws ";" ws;
+	// rule : ws id ws ("discard" | "inline" | "mergeup")? ws ":" ws alts ws ";" ws (comment ws)*;
 	bool parse_rule(ASTNode &node_w)
 	{
 		if (SCC_DEBUG) fprintf(stderr, "parse_rule %d\n", m_pos);
@@ -923,6 +938,14 @@ int main(int argc, char **argv)
 		m_col++;
 
 		parse_ws();
+		uint32_t m_pos_prev;
+		do
+		{
+			m_pos_prev = m_pos;
+			parse_comment();
+			parse_ws();
+		}
+		while (m_text[m_pos] != '\0' && m_pos_prev != m_pos);
 
 		if (SCC_DEBUG) fprintf(stderr, "exiting parse_rule %d\n", m_pos);
 		return true;
@@ -953,6 +976,23 @@ private:
 				continue;
 			}
 			break;
+		}
+	}
+
+	// ------------------------------------------------------------------------
+	// comment discard : "#" [^\r\n]*;
+	// parse and discard comment
+	void parse_comment()
+	{
+		if (SCC_DEBUG) fprintf(stderr, "parse_comment\n");
+		char ch = m_text[m_pos];
+		if (ch != '#') return;
+		for (;;)
+		{
+			m_pos++;
+			m_col++;
+			ch = m_text[m_pos];
+			if (ch == '\r' || ch == '\n' || ch == '\0') break;
 		}
 	}
 

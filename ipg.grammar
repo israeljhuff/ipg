@@ -1,9 +1,15 @@
-rules                      : ws rule+ ws;
-rule                       : ws id ws rule_mod rule_sep alts rule_end;
+# Israel's Parser Generator (IPG)
+# grammar definition
+# Author: Israel Huff
+# https://github.com/israeljhuff/ipg
+
+rules                      : ws (comment ws)* rule+;
+rule                       : ws id ws rule_mod rule_sep alts rule_end ws (comment ws)*;
 rule_mod                   : ("discard" | "inline" | "mergeup")?;
 rule_sep           discard : ws ":" ws;
 rule_end           discard : ws ";" ws;
 ws                 discard : [ \n\r\t]*;
+comment             inline : "#" [^\r\n]*;
 id                         : id_chars;
 id_chars            inline : [A-Za-z][0-9A-Za-z_]*;
 alts                       : alt (alts_sep alt)*;
