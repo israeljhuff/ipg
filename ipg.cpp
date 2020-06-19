@@ -4,6 +4,8 @@
 
 // g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
+// g++ --std=c++11 ipg.cpp -o ipg.exe && ./ipg.exe ipg.grammar > tmp.cpp
+// g++ --std=c++11 tmp.cpp && ./a.exe tmp.grammar
 
 // TODO: store errors, then only print last one since previous ones may just be due to alternate parsing
 // TODO: when parsing a rule (or alts?), only clear errors that occurred before it
@@ -478,6 +480,7 @@ int main(int argc, char **argv)
 		printf("%s{\n", tabs.c_str());
 		printf("%s\tbool ok%d = false;\n", tabs.c_str(), depth);
 		printf("%s\tuint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
+		printf("%s\tuint32_t col_start%d = m_col;\n", tabs.c_str(), depth);
 		printf("\n");
 
 		size_t n_elems = elem.sub_elems().size();
@@ -562,6 +565,12 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 
+		printf("%sif (!ok%d)\n", tabs.c_str(), depth - 1);
+		printf("%s{\n", tabs.c_str());
+		printf("%s\tm_pos = pos_start%d;\n", tabs.c_str(), depth - 1);
+		printf("%s\tm_col = col_start%d;\n", tabs.c_str(), depth - 1);
+		printf("%s\tbreak;\n", tabs.c_str());
+		printf("%s}\n", tabs.c_str());
 		printf("%sif (!ok%d) break;\n", tabs.c_str(), depth - 1);
 	}
 
@@ -828,34 +837,6 @@ int main(int argc, char **argv)
 			}
 			retval = false;
 		}
-
-		//~ // check for named elems referring to non-existent rules
-		//~ to_visit.clear();
-		//~ visited.clear();
-		//~ std::map<std::string, bool> to_visit_new;
-		//~ // loop over rules
-		//~ for (auto rule : m_grammar.rules())
-		//~ {
-			//~ fprintf(stderr, "!!! %s\n", rule.first.c_str());
-			//~ // loop over child elems
-			//~ for (int i = 0; i < rule.second.elems().size(); i++)
-			//~ {
-				//~ Elem &elem = rule.second.elems()[i];
-				//~ check_rule_elems(elem, to_visit, to_visit_new, visited);
-				//~ fprintf(stderr, "@@@ %s %lu\n", rule.first.c_str(), to_visit_new.size());
-				//~ for (auto named_elem : to_visit_new)
-				//~ {
-					//~ fprintf(stderr, "\t### %s\n", named_elem.first.c_str());
-					//~ if (m_grammar.rules().find(named_elem.first) == m_grammar.rules().end())
-					//~ {
-						//~ fprintf(stderr, "ERROR: undefined rule name '%s'\n", named_elem.first.c_str());
-						//~ retval = false;
-						//~ exit(1);
-					//~ }
-				//~ }
-				//~ to_visit_new.clear();
-			//~ }
-		//~ }
 
 		return retval;
 	}
