@@ -2,14 +2,18 @@
 // Author: Israel Huff
 // https://github.com/israeljhuff/ipg
 
+// Linux
 // g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
+
+// Windows (Cygwin)
 // g++ --std=c++11 ipg.cpp -o ipg.exe && ./ipg.exe ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.exe tmp.grammar
 
 // TODO: store errors, then only print last one since previous ones may just be due to alternate parsing
 // TODO: when parsing a rule (or alts?), only clear errors that occurred before it
 // TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
+//       and report correct positions of nested errors
 // TODO: vector instead of map for rule list?
 
 #include <cstdint>
