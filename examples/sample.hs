@@ -1,3 +1,8 @@
+5;
+!5;
+((!5 * 4) << 2) > 6;
+~5 & 21;
+
 uint8 a = 1234, b = 5;
 sint16 a = 1234, b = 5;
 
@@ -59,12 +64,14 @@ loop post
 }
 
 loop (;;) {}
-
-loop (a = b, c = d + 1;;) {}
+loop (a = b - 7 * 5, c = d + 1, x = 5;;) {}
+loop (int32 a = b, c = d + 1, x = 5;;) {}
+loop (SomeClass a = 1, b = 2, c = 3;;) {}
 
 vector<sint32> foo1 = [];
 vector<sint32> foo2 = [ 5 ];
-vector<sint32> foo2 = [5,];
+vector<sint32> foo3 = [5,];
+vector<sint32> foo4 = [5,6];
 
 
 vector<sint32> foo2 = [2+7, asdf ];
@@ -87,6 +94,3 @@ sint32 myfunc(uint32 foo, uint8 bar)
   }
   return bar + 10;
 }
-
-5;
-!5;

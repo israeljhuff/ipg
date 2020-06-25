@@ -6,7 +6,6 @@
 ###############################################################################
 
 # TODO: class support
-# TODO: typecast support
 
 program                       : wscm* (flow_control | function | scope | statement)* wscm*;
 
@@ -32,9 +31,7 @@ loop_keyword          discard : "loop";
 loop_open             discard : wscm* "(" wscm*;
 loop_close            discard : wscm* ")" wscm*;
 loop_sep              discard : wscm* ";" wscm*;
-# TODO: need to allow new declarations -- currently incorrect grammar
-loop_init                     : loop_init_part (wscm* expr_decl_sep wscm* loop_init_part)*;
-loop_init_part                : expr_declare_vars | expr_assign_simple;
+loop_init                     : expr_declare_vars | expr_assign_multiple;
 loop_check                    : expr_non_assign;
 loop_update                   : expr_assign;
 
@@ -82,9 +79,11 @@ expr_decl_open        discard : "<";
 expr_decl_close       discard : ">";
 
 expr_assign                   : identifier wscm* op_assign wscm* expr_non_assign;
-expr_assign_simple            : identifier wscm* op_assign_simple wscm* expr_non_assign;
 
-#expr_non_assign               : op_unary? wscm* operand (wscm* op_binary wscm* op_unary? wscm* operand)*;
+expr_assign_multiple          : expr_assign_mult_part (wscm* expr_assign_mult_sep wscm* expr_assign_mult_part)*;
+expr_assign_mult_part         : identifier wscm* op_assign_simple wscm* expr_non_assign;
+expr_assign_mult_sep  discard : ",";
+
 expr_non_assign               : expr_non_assign_part operand (wscm* op_binary wscm* expr_non_assign_part operand)*;
 expr_non_assign_part          : typecast? wscm* op_unary? wscm* typecast? wscm*;
 
