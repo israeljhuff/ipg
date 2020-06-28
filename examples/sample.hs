@@ -10,6 +10,9 @@ sint16 c = ((5));
 
 uint8 d = 5 + (2 * 3);
 
+bool what1 = true;
+bool what2 = false;
+
 {
   if (foo > 10)
   {
@@ -82,6 +85,22 @@ map< uint32, vector < customType>> bar = {};
 map< uint32, vector < customType>> bar = {1:1};
 map< uint32, vector < customType>> bar = { 1 : 1, asdf : 5 + 7, };
 
+void aVoidFunc()
+{
+  int32 a = 57;
+  a += 5;
+}
+
+uint32 aParameterlessFunc()
+{
+  sint32 asdf = 0;
+  loop (sint32 i = 0; i < 10; i += 1)
+  {
+    asdf += 7;
+  }
+  return (uint32)asdf;
+}
+
 sint32 myfunc(uint32 foo, uint8 bar)
 {
   if (foo > (SomeClass)!(10 + 7))
@@ -93,4 +112,24 @@ sint32 myfunc(uint32 foo, uint8 bar)
     return (sint32)10;
   }
   return bar + 10;
+}
+
+/(a*b+c[^d])|asdf|(x)/;
+/a*b+c[^d]|asdf|(xs*a)/;
+/a*b+c[^d]|asdf|(xs+|(a|[^a-zA-Z])|b?c|d*)/;
+
+class MyClass
+{
+  SomeType someVar = 1;
+  sint32 anotherVar = 5;
+
+  uint32 myFunc1()
+  {
+    return 5;
+  }
+
+  uint32 myFunc2(uint32 foo)
+  {
+    return 3;
+  }
 }
