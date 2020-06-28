@@ -114,21 +114,27 @@ sint32 myfunc(uint32 foo, uint8 bar)
   return bar + 10;
 }
 
-/(a*b+c[^d])|asdf|(x)/;
+bool didItMatch = "a" =~ /(a*b+c[^d])|asdf|(x)/;
 /a*b+c[^d]|asdf|(xs*a)/;
 /a*b+c[^d]|asdf|(xs+|(a|[^a-zA-Z])|b?c|d*)/;
 
 class MyClass
 {
-  SomeType someVar = 1;
-  sint32 anotherVar = 5;
+  public SomeType someVar = 1;
+  protected sint32 anotherVar = 5;
+  private sint32 yetAnotherVar = 7;
 
-  uint32 myFunc1()
+  public uint32 myFunc1()
   {
     return 5;
   }
 
-  uint32 myFunc2(uint32 foo)
+  protected uint32 myFunc1(uint32 foo)
+  {
+    return 1;
+  }
+
+  private uint32 myFunc3(uint32 foo, sint8 bar)
   {
     return 3;
   }

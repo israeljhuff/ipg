@@ -13,9 +13,10 @@ wscm                  discard : ws | comment;
 
 class                         : class_keyword wscm* identifier wscm*
                                 class_open wscm*
-                                ((statement_decl_vars | function) wscm*)*
+                                (class_access_spec wscm+ (statement_decl_vars | function) wscm*)*
                                 class_close;
 class_keyword         discard : "class";
+class_access_spec             : "public" | "protected" | "private";
 class_open            discard : "{";
 class_close           discard : "}";
 
@@ -121,11 +122,11 @@ op_unary                      : op_arithmetic_unary | op_logical_unary;
 op_binary                     : op_arithmetic_binary | op_logical_binary | op_compare;
 op_arithmetic_unary           : "-" | "~";
 op_arithmetic_binary          : "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>";
-op_assign                     : "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | "=~" | "!~" | op_assign_simple;
+op_assign                     : "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | op_assign_simple;
 op_assign_simple              : "=";
 op_logical_unary              : "!";
 op_logical_binary             : "&&" | "||";
-op_compare                    : "==" | "!=" | "<=" | ">=" | "<" | ">";
+op_compare                    : "==" | "!=" | "<=" | ">=" | "<" | ">" | "=~" | "!~";
 
 identifier             inline : [A-Za-z][0-9A-Za-z_]*;
 literal                       : bool | float | integer | string | literal_vector | literal_map;
