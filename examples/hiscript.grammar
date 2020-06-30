@@ -40,7 +40,7 @@ loop_close            discard : wscm* ")" wscm*;
 loop_sep              discard : wscm* ";" wscm*;
 loop_init                     : expr_declare_vars | expr_assign_multiple;
 loop_check                    : expr_non_assign;
-loop_update                   : expr_assign;
+loop_update                   : expr_assign_multiple;
 
 scope                         : wscm* scope_open wscm* (flow_control | scope | statement)* wscm* scope_close wscm*;
 scope_open            discard : "{";
@@ -65,7 +65,7 @@ func_params_open      discard : "(";
 func_params_close     discard : ")";
 
 # expressions #################################################################
-expression                    : expr_flow_control | expr_declare_vars | expr_assign | expr_non_assign;
+expression                    : expr_flow_control | expr_declare_vars | expr_assign_multiple | expr_non_assign;
 
 expr_declare_vars             : (type | expr_decl_vector_type | expr_decl_map_type | identifier)
                                 wscm+ expr_decl_vars_part (wscm* expr_decl_sep wscm* expr_decl_vars_part)*;
@@ -86,14 +86,15 @@ expr_decl_sep         discard : ",";
 expr_decl_open        discard : "<";
 expr_decl_close       discard : ">";
 
-expr_assign                   : identifier wscm* op_assign wscm* expr_non_assign;
-
 expr_assign_multiple          : expr_assign_mult_part (wscm* expr_assign_mult_sep wscm* expr_assign_mult_part)*;
-expr_assign_mult_part         : identifier wscm* op_assign_simple wscm* expr_non_assign;
+expr_assign_mult_part         : identifier expr_assign_index* wscm* op_assign wscm* expr_non_assign;
 expr_assign_mult_sep  discard : ",";
+expr_assign_index             : wscm* expr_assign_index_open wscm* expr_non_assign wscm* expr_assign_index_close wscm*;
+expr_assign_index_open        : "[";
+expr_assign_index_close       : "]";
 
-expr_non_assign               : expr_non_assign_part operand (wscm* op_binary wscm* expr_non_assign_part operand)*;
-expr_non_assign_part          : typecast? wscm* op_unary? wscm* typecast? wscm*;
+expr_non_assign               : expr_na_part operand expr_assign_index* (wscm* op_binary wscm* expr_na_part operand expr_assign_index*)*;
+expr_na_part                  : typecast? wscm* op_unary? wscm* typecast? wscm*;
 
 expr_flow_control             : "break" wscm* expr_non_assign? | "continue" | "return" wscm* expr_non_assign?;
 
@@ -119,7 +120,7 @@ group_close           discard : wscm* ")";
 # operators ###################################################################
 op_decl_assign                : "=";
 op_unary                      : op_arithmetic_unary | op_logical_unary;
-op_binary                     : op_arithmetic_binary | op_logical_binary | op_compare;
+op_binary                     : op_logical_binary | op_arithmetic_binary | op_compare;
 op_arithmetic_unary           : "-" | "~";
 op_arithmetic_binary          : "+" | "-" | "*" | "/" | "%" | "&" | "|" | "^" | "<<" | ">>";
 op_assign                     : "+=" | "-=" | "*=" | "/=" | "%=" | "&=" | "|=" | "^=" | "<<=" | ">>=" | op_assign_simple;
@@ -192,7 +193,7 @@ literal_map                   : lit_map_open wscm*
                                 (lit_map_key_value wscm* lit_map_sep_elem wscm*)*
                                 lit_map_close;
 lit_map_key_value             : expr_non_assign wscm* lit_map_sep_kv wscm* expr_non_assign;
-lit_map_open          discard : "{";
-lit_map_close         discard : "}";
+lit_map_open          discard : "[";
+lit_map_close         discard : "]";
 lit_map_sep_elem      discard : ",";
 lit_map_sep_kv        discard : ":";
