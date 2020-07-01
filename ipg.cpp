@@ -21,7 +21,7 @@
 #include <map>
 #include <vector>
 
-#define SCC_DEBUG 1
+#define SCC_DEBUG 0
 
 // ----------------------------------------------------------------------------
 namespace IPG
@@ -388,7 +388,7 @@ int main(int argc, char **argv)
 		printf("\t// ***RULE*** %s\n", rule.to_string().c_str());
 		printf("\tint32_t parse_%s(ASTNode &parent)\n", rule.name().c_str());
 		printf("\t{\n");
-		printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.name().c_str());
+		if (SCC_DEBUG) printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.name().c_str());
 		printf("\t\tuint32_t pos_prev = m_pos;\n");
 		printf("\t\tuint32_t col_prev = m_col;\n");
 		printf("\t\tuint32_t line_prev = m_line;\n");
@@ -459,7 +459,10 @@ int main(int argc, char **argv)
 		printf("%s}\n", tabs.c_str());
 		printf("%selse\n", tabs.c_str());
 		printf("%s{\n", tabs.c_str());
-		printf("%s\tprintf(\"*%%s*\\n\", std::string(&m_text[pos_start%d], m_pos - pos_start%d).c_str());\n", tabs.c_str(), depth, depth);
+		if (SCC_DEBUG)
+		{
+			printf("%s\tprintf(\"*%%s*\\n\", std::string(&m_text[pos_start%d], m_pos - pos_start%d).c_str());\n", tabs.c_str(), depth, depth);
+		}
 		if (depth > 0)
 		{
 			printf("%s\tfor (auto child%d : astn%d.children())\n", tabs.c_str(), depth, depth);

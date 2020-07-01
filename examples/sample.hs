@@ -145,53 +145,59 @@ class MyClass
   }
 }
 
-#------------------------------------------------------------------------------
-# NOTE: cos_tbl and sin_tbl LUTs assumed to be 1024 entries
-void fft_1d_no_recurse(vector<fp32> real, vector<fp32> imag, sint32 log2N)
+class FFT
 {
-  if (log2N < 0 || log2N > 31) { return; }
+  private fp32 tmp1 = 1;
+  private vector<fp32> tmp2 = [], tmp3 = [];
 
-  sint32 N = 1 << log2N;
-
-  # bit-reversal permutation
-  # rearrange date into order expected by FFT
-  loop (sint32 i = 0; i < N; i += 1)
+  #------------------------------------------------------------------------------
+  # NOTE: cos_tbl and sin_tbl LUTs assumed to be 1024 entries
+  public void fft_1d_no_recurse(vector<fp32> real, vector<fp32> imag, sint32 log2N)
   {
-    sint32 idx = 0;
-    loop (sint32 j = 0; j < log2N; j += 1)
-    {
-      sint32 shift = (log2N - 1 - 2 * j);
-      if (shift >= 0) { idx += ((i & (1 << j)) << shift); }
-      else { idx += ((i & (1 << j)) >> -shift); }
-    }
-    if (idx <= i) { continue; }
-    fp32 swapr = real[idx];
-    fp32 swapi = imag[idx];
-    real[idx] = real[i];
-    imag[idx] = imag[i];
-    real[i] = swapr;
-    imag[i] = swapi;
-  }
+    if (log2N < 0 || log2N > 31) { return; }
 
-  # FFT
-  loop (sint32 Ni = 2, step = N / 2; Ni <= N; Ni *= 2, step /= 2)
-  {
-    fp32 scale_idx = 1024 / Ni;
-    loop (sint32 off = 0; off < N; off += Ni)
+    sint32 N = 1 << log2N;
+
+    # bit-reversal permutation
+    # rearrange date into order expected by FFT
+    loop (sint32 i = 0; i < N; i += 1)
     {
-      loop (sint32 k = 0; k < Ni / 2; k += 1)
+      sint32 idx = 0;
+      loop (sint32 j = 0; j < log2N; j += 1)
       {
-        sint32 idx1 = k + off;
-        sint32 idx2 = idx1 + Ni / 2;
-        sint32 index = k * scale_idx;
-        fp32 tmpr1 = real[idx1];
-        fp32 tmpi1 = imag[idx1];
-        fp32 tmpr2 = real[idx2];
-        fp32 tmpi2 = imag[idx2];
-        real[idx1] = tmpr1 + ( tmpr2 * cos_tbl[index] + tmpi2 * sin_tbl[index]);
-        imag[idx1] = tmpi1 + (-tmpr2 * sin_tbl[index] + tmpi2 * cos_tbl[index]);
-        real[idx2] = tmpr1 - ( tmpr2 * cos_tbl[index] + tmpi2 * sin_tbl[index]);
-        imag[idx2] = tmpi1 - (-tmpr2 * sin_tbl[index] + tmpi2 * cos_tbl[index]);
+        sint32 shift = (log2N - 1 - 2 * j);
+        if (shift >= 0) { idx += ((i & (1 << j)) << shift); }
+        else { idx += ((i & (1 << j)) >> -shift); }
+      }
+      if (idx <= i) { continue; }
+      fp32 swapr = real[idx];
+      fp32 swapi = imag[idx];
+      real[idx] = real[i];
+      imag[idx] = imag[i];
+      real[i] = swapr;
+      imag[i] = swapi;
+    }
+
+    # FFT
+    loop (sint32 Ni = 2, step = N / 2; Ni <= N; Ni *= 2, step /= 2)
+    {
+      fp32 scale_idx = 1024 / Ni;
+      loop (sint32 off = 0; off < N; off += Ni)
+      {
+        loop (sint32 k = 0; k < Ni / 2; k += 1)
+        {
+          sint32 idx1 = k + off;
+          sint32 idx2 = idx1 + Ni / 2;
+          sint32 index = k * scale_idx;
+          fp32 tmpr1 = real[idx1];
+          fp32 tmpi1 = imag[idx1];
+          fp32 tmpr2 = real[idx2];
+          fp32 tmpi2 = imag[idx2];
+          real[idx1] = tmpr1 + ( tmpr2 * cos_tbl[index] + tmpi2 * sin_tbl[index]);
+          imag[idx1] = tmpi1 + (-tmpr2 * sin_tbl[index] + tmpi2 * cos_tbl[index]);
+          real[idx2] = tmpr1 - ( tmpr2 * cos_tbl[index] + tmpi2 * sin_tbl[index]);
+          imag[idx2] = tmpi1 - (-tmpr2 * sin_tbl[index] + tmpi2 * cos_tbl[index]);
+        }
       }
     }
   }

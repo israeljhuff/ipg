@@ -5,7 +5,7 @@
 # https://github.com/israeljhuff/???
 ###############################################################################
 
-program                       : wscm* (class | flow_control | function | scope | statement)* wscm*;
+program                       : wscm* ((class | flow_control | function | scope | statement) wscm*)*;
 
 ws                    discard : [ \n\r\t];
 comment               discard : "#" [^\r\n]*;
@@ -20,12 +20,14 @@ class_access_spec             : "public" | "protected" | "private";
 class_open            discard : "{";
 class_close           discard : "}";
 
-flow_control          mergeup : wscm* (if_elif_else_block | loop_block) wscm*;
+flow_control          mergeup : if_elif_else_block | loop_block;
 
 if_elif_else_block    mergeup : if_scope (wscm* elif_scope)* (wscm* else_scope)?;
-if_scope                      : "if" wscm* "(" wscm* expr_non_assign wscm* ")" wscm* scope;
-elif_scope                    : "elif" wscm* "(" wscm* expr_non_assign wscm* ")" wscm* scope;
+if_scope                      : "if" if_cond_open expr_non_assign if_cond_close scope;
+elif_scope                    : "elif" if_cond_open expr_non_assign if_cond_close scope;
 else_scope                    : "else" wscm* scope;
+if_cond_open          discard : wscm* "(" wscm*;
+if_cond_close         discard : wscm* ")" wscm*;
 
 loop_block                    : loop_keyword ((wscm+ "post") | wscm*)
                                 (
@@ -33,6 +35,7 @@ loop_block                    : loop_keyword ((wscm+ "post") | wscm*)
                                  loop_init? loop_sep loop_check? loop_sep loop_update?
                                  loop_close
                                 )?
+                                wscm*
                                 scope;
 loop_keyword          discard : "loop";
 loop_open             discard : wscm* "(" wscm*;
@@ -42,23 +45,23 @@ loop_init                     : expr_declare_vars | expr_assign_multiple;
 loop_check                    : expr_non_assign;
 loop_update                   : expr_assign_multiple;
 
-scope                         : wscm* scope_open wscm* (flow_control | scope | statement)* wscm* scope_close wscm*;
+scope                         : scope_open wscm* ((flow_control | scope | statement) wscm*)* scope_close;
 scope_open            discard : "{";
 scope_close           discard : "}";
 
-statement                     : wscm* expression wscm* statement_term wscm*;
-statement_decl_vars           : wscm* expr_declare_vars wscm* statement_term wscm*;
+statement                     : expression wscm* statement_term;
+statement_decl_vars           : expr_declare_vars wscm* statement_term;
 statement_term        discard : ";";
 
 # function ####################################################################
-function                      : wscm* (type | expr_decl_vector_type | expr_decl_map_type | identifier) wscm+
+function                      : (type | expr_decl_vector_type | expr_decl_map_type | identifier) wscm+
                                 identifier wscm*
                                 func_params_open wscm*
                                 (func_param (wscm* func_params_sep wscm* func_param)* wscm*)?
                                 func_params_close wscm*
                                 scope_open wscm*
-                                (flow_control | scope | statement)* wscm*
-                                scope_close wscm*;
+                                ((flow_control | scope | statement) wscm*)*
+                                scope_close;
 func_param                    : (type | expr_decl_vector_type | expr_decl_map_type | identifier) wscm+ identifier;
 func_params_sep       discard : ",";
 func_params_open      discard : "(";
