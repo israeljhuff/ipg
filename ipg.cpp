@@ -12,7 +12,8 @@
 
 // TODO: store errors, then only print last one since previous ones may just be due to alternate parsing
 // TODO: when parsing a rule (or alts?), only clear errors that occurred before it
-// TODO: track position of last failed match in instance variable (eg. if failed to find group closing paren, report that line/position)
+// TODO: track position of last failed match in instance variable
+//       (eg. if failed to find group closing paren, report that line/position)
 //       and report correct positions of nested errors
 // TODO: vector instead of map for rule list?
 
@@ -318,6 +319,7 @@ public:
 	{
 		for (auto err : m_errs)
 		{ fprintf(stderr, "E: %%s\n", std::to_string(err).c_str()); }
+		fprintf(stderr, "%%s\n", std::to_string(m_errs.size()).c_str());
 	}
 )foo");
 
@@ -373,7 +375,7 @@ int main(int argc, char **argv)
 	printf("%%u %%lu\n", p.pos(), p.len());
 	astn.print();
 	fprintf(stderr, "%%d\n", retval);
-	if (RET_FAIL == retval || p.pos() < p.len()) p.print_last_err();
+	if (RET_FAIL == retval || p.pos() < p.len()) p.print_errs();
 	else fprintf(stderr, "parsed successfully\n");
 	delete[] buf;
 	return 0;
@@ -407,9 +409,9 @@ int main(int argc, char **argv)
 		printf("\n");
 		printf("\t\tif (!ok0)\n");
 		printf("\t\t{\n");
-		printf("\t\t\tm_errs.push_back(m_pos);\n");
-		printf("\t\t\tm_errs.push_back(m_line);\n");
-		printf("\t\t\tm_errs.push_back(m_col);\n");
+		//~ printf("\t\t\tm_errs.push_back(m_pos);\n");
+		//~ printf("\t\t\tm_errs.push_back(m_line);\n");
+		//~ printf("\t\t\tm_errs.push_back(m_col);\n");
 		printf("\t\t\tm_pos = pos_prev;\n");
 		printf("\t\t\tm_col = col_prev;\n");
 		printf("\t\t\tm_line = line_prev;\n");
@@ -436,6 +438,9 @@ int main(int argc, char **argv)
 		printf("%s// ***ALTERNATES***\n", tabs.c_str());
 		printf("%sbool ok%d = false;\n", tabs.c_str(), depth);
 		printf("%suint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
+		printf("%suint32_t col_start%d = m_col;\n", tabs.c_str(), depth);
+		printf("%suint32_t errs_prev = m_errs.size();\n", tabs.c_str());
+		//~ printf("%s\tprintf(\"!!%%u %%u\\n\", errs_prev, %u);\n", tabs.c_str(), depth);
 		if (depth > 0)
 		{
 			printf("%sASTNode astn%d(m_pos, \"alts_tmp\");\n", tabs.c_str(), depth);
@@ -445,8 +450,10 @@ int main(int argc, char **argv)
 		size_t n_elems = elems.size();
 		for (size_t e = 0; e < n_elems; e++)
 		{
+			//~ printf("%s\tm_errs.erase(m_errs.begin() + errs_prev, m_errs.end());\n", tabs.c_str());
 			if (e > 0) printf("\n");
 			print_alt(elems[e], depth + 1);
+			printf("%s\tif (ok%d) break;\n", tabs.c_str(), depth);
 		}
 		printf("\n");
 		printf("%s\tbreak;\n", tabs.c_str());
@@ -456,12 +463,17 @@ int main(int argc, char **argv)
 		printf("%s\tm_errs.push_back(m_pos);\n", tabs.c_str());
 		printf("%s\tm_errs.push_back(m_line);\n", tabs.c_str());
 		printf("%s\tm_errs.push_back(m_col);\n", tabs.c_str());
+		printf("%s\tm_pos = pos_start%d;\n", tabs.c_str(), depth);
+		printf("%s\tm_col = col_start%d;\n", tabs.c_str(), depth);
+		//~ if (depth > 0) printf("%s\tbreak;\n", tabs.c_str());
+		if (SCC_DEBUG) printf("%s\tprintf(\"--------------adding\\n\");\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
 		printf("%selse\n", tabs.c_str());
 		printf("%s{\n", tabs.c_str());
 		if (SCC_DEBUG)
 		{
-			printf("%s\tprintf(\"*%%s*\\n\", std::string(&m_text[pos_start%d], m_pos - pos_start%d).c_str());\n", tabs.c_str(), depth, depth);
+			printf("%s\tprintf(\"*%%s*\\n\", std::string(&m_text[pos_start%d], m_pos - pos_start%d).c_str());\n",
+				tabs.c_str(), depth, depth);
 		}
 		if (depth > 0)
 		{
@@ -470,7 +482,9 @@ int main(int argc, char **argv)
 			printf("%s\t\tastn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
 			printf("%s\t}\n", tabs.c_str());
 		}
-		//~ printf("%s\tm_errs.clear();\n", tabs.c_str());
+		//~ if (SCC_DEBUG) printf("%s\tprintf(\"--------------removing\\n\");\n", tabs.c_str());
+		//~ printf("%s\tprintf(\"@@%%u %%u\\n\", errs_prev, %u);\n", tabs.c_str(), depth);
+		//~ printf("%s\tm_errs.erase(m_errs.begin() + errs_prev, m_errs.end());\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
 	}
 
@@ -498,10 +512,10 @@ int main(int argc, char **argv)
 		}
 
 		printf("\n");
-		printf("%s\tok%d = true;\n", tabs.c_str(), depth - 1);
+		//~ printf("%s\tok%d = true;\n", tabs.c_str(), depth - 1);
+		printf("%s\tok%d = ok%d;\n", tabs.c_str(), depth - 1, depth);
 		printf("%s\tbreak;\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
-		printf("%sif (ok%d) break;\n", tabs.c_str(), depth - 1);
 	}
 
 	// ------------------------------------------------------------------------
@@ -532,11 +546,7 @@ int main(int argc, char **argv)
 			printf("%s{\n", tabs.c_str());
 			printf("%s\tpos_start%d = m_pos;\n", tabs.c_str(), depth - 1);
 			print_elem_inner(elem, depth);
-			printf("%s\tif (ok%d)\n", tabs.c_str(), depth);
-			printf("%s\t{\n", tabs.c_str());
-			printf("%s\t\tok%d = ok%d;\n", tabs.c_str(), depth - 1, depth);
-			printf("%s\t\tcontinue;\n", tabs.c_str());
-			printf("%s\t}\n", tabs.c_str());
+			printf("%s\tif (ok%d) continue;\n", tabs.c_str(), depth);
 			printf("%s\tok%d = true;\n", tabs.c_str(), depth - 1);
 			printf("%s\tbreak;\n", tabs.c_str());
 			printf("%s}\n", tabs.c_str());
@@ -578,7 +588,6 @@ int main(int argc, char **argv)
 		printf("%s\tm_col = col_start%d;\n", tabs.c_str(), depth - 1);
 		printf("%s\tbreak;\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
-		printf("%sif (!ok%d) break;\n", tabs.c_str(), depth - 1);
 	}
 
 	// ------------------------------------------------------------------------
@@ -659,7 +668,8 @@ int main(int argc, char **argv)
 					}
 					else
 					{
-						printf("%s(ch_decoded >= %d && ch_decoded <= %d)", flag_negate ? "!" : "", range_ch1, range_ch2);
+						printf("%s(ch_decoded >= %d && ch_decoded <= %d)",
+							flag_negate ? "!" : "", range_ch1, range_ch2);
 					}
 				}
 			}
@@ -708,7 +718,8 @@ int main(int argc, char **argv)
 				}
 			}
 			printf(")))\n");
-			printf("%s{ m_pos += len_item%d; m_col += len_item%d; ok%d = true; }\n", tabs.c_str(), depth, depth, depth);
+			printf("%s{ m_pos += len_item%d; m_col += len_item%d; ok%d = true; }\n",
+				tabs.c_str(), depth, depth, depth);
 
 			printf("%sif (ok%d)\n", tabs.c_str(), depth);
 			printf("%s{\n", tabs.c_str());

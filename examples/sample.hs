@@ -1,5 +1,18 @@
 5;
 !5;
+
+print();
+print("asdf");
+print("asdf", 1);
+
+#print("asdf", 3,);
+
+void fft_1d_no_recurse(vector<fp32> real, vector<fp32> imag, sint32 log2N) {}
+
+{
+#  idf (foo > 10 || bar < 5) {}
+}
+
 ((!5 * 4) << 2) > 6;
 ~5 & 21;
 
@@ -9,6 +22,7 @@ sint16 a = 1234, b = 5;
 sint16 c = ((5));
 
 uint8 d = 5 + (2 * 3);
+
 
 bool what1 = true;
 bool what2 = false;
@@ -80,8 +94,6 @@ vector<sint32> foo1 = [];
 vector<sint32> foo2 = [ 5 ];
 vector<sint32> foo3 = [5,];
 vector<sint32> foo4 = [5,6];
-
-
 vector<sint32> foo2 = [2+7, asdf ];
 
 map<uint32, customType > bar = 1;  # parser doesn't do type checking so this is ok during parsing step of compilation

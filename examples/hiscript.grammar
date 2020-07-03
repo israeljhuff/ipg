@@ -5,7 +5,7 @@
 # https://github.com/israeljhuff/???
 ###############################################################################
 
-program                       : wscm* ((class | flow_control | function | scope | statement) wscm*)*;
+program                       : wscm* ((class | flow_control | function_def | scope | statement) wscm*)*;
 
 ws                    discard : [ \n\r\t];
 comment               discard : "#" [^\r\n]*;
@@ -13,7 +13,7 @@ wscm                  discard : ws | comment;
 
 class                         : class_keyword wscm* identifier wscm*
                                 class_open wscm*
-                                (class_access_spec wscm+ (statement_decl_vars | function) wscm*)*
+                                (class_access_spec wscm+ (statement_decl_vars | function_def) wscm*)*
                                 class_close;
 class_keyword         discard : "class";
 class_access_spec             : "public" | "protected" | "private";
@@ -54,15 +54,21 @@ statement_decl_vars           : expr_declare_vars wscm* statement_term;
 statement_term        discard : ";";
 
 # function ####################################################################
-function                      : (type | expr_decl_vector_type | expr_decl_map_type | identifier) wscm+
+function_def                  : (type | expr_decl_vector_type | expr_decl_map_type | identifier) wscm+
                                 identifier wscm*
                                 func_params_open wscm*
-                                (func_param (wscm* func_params_sep wscm* func_param)* wscm*)?
+                                (func_def_param wscm* (func_params_sep wscm* func_def_param wscm*)*)?
                                 func_params_close wscm*
                                 scope_open wscm*
                                 ((flow_control | scope | statement) wscm*)*
                                 scope_close;
-func_param                    : (type | expr_decl_vector_type | expr_decl_map_type | identifier) wscm+ identifier;
+func_def_param                : (type | expr_decl_vector_type | expr_decl_map_type | identifier) wscm+ identifier;
+
+function_call                 : identifier wscm*
+                                func_params_open wscm*
+                                (expr_non_assign wscm* (func_params_sep wscm* expr_non_assign wscm*)*)?
+                                func_params_close wscm*;
+
 func_params_sep       discard : ",";
 func_params_open      discard : "(";
 func_params_close     discard : ")";
@@ -114,7 +120,7 @@ typecast                      : typecast_open wscm* (type | identifier) wscm* ty
 typecast_open         discard : "(";
 typecast_close        discard : ")";
 
-operand                       : literal | identifier | group | regex;
+operand                       : function_call | literal | identifier | group | regex;
 
 group                         : group_open expr_non_assign group_close;
 group_open            discard : "(" wscm*;
@@ -132,7 +138,7 @@ op_logical_unary              : "!";
 op_logical_binary             : "&&" | "||";
 op_compare                    : "==" | "!=" | "<=" | ">=" | "<" | ">" | "=~" | "!~";
 
-identifier             inline : [A-Za-z][0-9A-Za-z_]*;
+identifier             inline : [A-Za-z_][0-9A-Za-z_]*;
 literal                       : bool | float | integer | string | literal_vector | literal_map;
 
 # simple Perl-like regex syntax ###############################################
@@ -185,7 +191,7 @@ exponent               inline : [eE][+\-]?[0-9]+;
 
 # literal vector ##############################################################
 literal_vector                : lit_vec_open wscm*
-                                (expr_non_assign wscm* lit_vec_sep wscm*)*
+                                (expr_non_assign wscm* (lit_vec_sep wscm* expr_non_assign wscm*)* (lit_vec_sep wscm*)?)?
                                 lit_vec_close;
 lit_vec_open          discard : "[";
 lit_vec_close         discard : "]";
@@ -193,7 +199,7 @@ lit_vec_sep           discard : ",";
 
 # literal map #################################################################
 literal_map                   : lit_map_open wscm*
-                                (lit_map_key_value wscm* lit_map_sep_elem wscm*)*
+                                (lit_map_key_value wscm* (lit_map_sep_elem wscm* lit_map_key_value wscm*)* (lit_map_sep_elem wscm*)?)?
                                 lit_map_close;
 lit_map_key_value             : expr_non_assign wscm* lit_map_sep_kv wscm* expr_non_assign;
 lit_map_open          discard : "[";
