@@ -1,17 +1,18 @@
+hello();
 5;
 !5;
+
+{
+  dummy();
+  5 + 7;
+#  id (foo > 10 || bar < 5) {}
+#  print("asdf", 3,);
+#  void fft_1d_no_recurse(vector<fp32> real, vector<fp32> imag, sint32 log2N,) {}
+}
 
 print();
 print("asdf");
 print("asdf", 1);
-
-#print("asdf", 3,);
-
-void fft_1d_no_recurse(vector<fp32> real, vector<fp32> imag, sint32 log2N) {}
-
-{
-#  idf (foo > 10 || bar < 5) {}
-}
 
 ((!5 * 4) << 2) > 6;
 ~5 & 21;

@@ -99,8 +99,8 @@ expr_assign_multiple          : expr_assign_mult_part (wscm* expr_assign_mult_se
 expr_assign_mult_part         : identifier expr_assign_index* wscm* op_assign wscm* expr_non_assign;
 expr_assign_mult_sep  discard : ",";
 expr_assign_index             : wscm* expr_assign_index_open wscm* expr_non_assign wscm* expr_assign_index_close wscm*;
-expr_assign_index_open        : "[";
-expr_assign_index_close       : "]";
+expr_assign_index_open discard : "[";
+expr_assign_index_close discard : "]";
 
 expr_non_assign               : expr_na_part operand expr_assign_index* (wscm* op_binary wscm* expr_na_part operand expr_assign_index*)*;
 expr_na_part                  : typecast? wscm* op_unary? wscm* typecast? wscm*;

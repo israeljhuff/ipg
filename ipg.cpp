@@ -2,20 +2,12 @@
 // Author: Israel Huff
 // https://github.com/israeljhuff/ipg
 
-// Linux
-// g++ --std=c++11 ipg.cpp && ./a.out ipg.grammar > tmp.cpp
-// g++ --std=c++11 tmp.cpp && ./a.out tmp.grammar
-
-// Windows (Cygwin)
+// Linux or Windows (Cygwin)
 // g++ --std=c++11 ipg.cpp -o ipg.exe && ./ipg.exe ipg.grammar > tmp.cpp
 // g++ --std=c++11 tmp.cpp && ./a.exe tmp.grammar
 
-// TODO: store errors, then only print last one since previous ones may just be due to alternate parsing
-// TODO: when parsing a rule (or alts?), only clear errors that occurred before it
-// TODO: track position of last failed match in instance variable
-//       (eg. if failed to find group closing paren, report that line/position)
-//       and report correct positions of nested errors
 // TODO: vector instead of map for rule list?
+// TODO: track names of last fully- and partially-parsed rules
 
 #include <cstdint>
 #include <cstdio>
@@ -301,26 +293,18 @@ private:
 	uint32_t m_pos = 0;
 	uint32_t m_line = 1;
 	uint32_t m_col = 1;
-	std::vector<uint32_t> m_errs;
+	uint32_t m_pos_ok = 0;
+	uint32_t m_line_ok = 1;
+	uint32_t m_col_ok = 1;
 public:
 	Parser(char *text) { m_text = text; }
 	size_t len() { return strlen(m_text); }
 	uint32_t col() { return m_col; }
 	uint32_t line() { return m_line; }
 	uint32_t pos() { return m_pos; }
-	void print_last_err()
-	{
-		fprintf(stderr, "ERROR parsing grammar near position %%s (line %%s column %%s)\n",
-			std::to_string(m_errs.end()[-3]).c_str(),
-			std::to_string(m_errs.end()[-2]).c_str(),
-			std::to_string(m_errs.end()[-1]).c_str());
-	}
-	void print_errs()
-	{
-		for (auto err : m_errs)
-		{ fprintf(stderr, "E: %%s\n", std::to_string(err).c_str()); }
-		fprintf(stderr, "%%s\n", std::to_string(m_errs.size()).c_str());
-	}
+	uint32_t col_ok() { return m_col_ok; }
+	uint32_t line_ok() { return m_line_ok; }
+	uint32_t pos_ok() { return m_pos_ok; }
 )foo");
 
 		for (auto rule : m_grammar.rules()) print_rule(rule.second);
@@ -371,11 +355,10 @@ int main(int argc, char **argv)
 	ASTNode astn(0, "ROOT");
 	Parser p(buf);
 	int32_t retval = p.parse_%s(astn);
-	printf("%%d\n", p.line());
-	printf("%%u %%lu\n", p.pos(), p.len());
 	astn.print();
-	fprintf(stderr, "%%d\n", retval);
-	if (RET_FAIL == retval || p.pos() < p.len()) p.print_errs();
+	fprintf(stderr, "last fully-parsed element is before line %%d, col %%d, file position %%u of %%lu\n", p.line(), p.col(), p.pos(), p.len());
+	fprintf(stderr, "last partially-parsed element is before line %%d, col %%d\n", p.line_ok(), p.col_ok());
+	if (RET_FAIL == retval || p.pos() < p.len()) fprintf(stderr, "ERROR parsing\n");
 	else fprintf(stderr, "parsed successfully\n");
 	delete[] buf;
 	return 0;
@@ -392,8 +375,8 @@ int main(int argc, char **argv)
 		printf("\t{\n");
 		if (SCC_DEBUG) printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.name().c_str());
 		printf("\t\tuint32_t pos_prev = m_pos;\n");
-		printf("\t\tuint32_t col_prev = m_col;\n");
 		printf("\t\tuint32_t line_prev = m_line;\n");
+		printf("\t\tuint32_t col_prev = m_col;\n");
 		if ("mergeup" == rule.mod())
 		{
 			printf("\t\tASTNode &astn0 = parent;\n");
@@ -409,12 +392,9 @@ int main(int argc, char **argv)
 		printf("\n");
 		printf("\t\tif (!ok0)\n");
 		printf("\t\t{\n");
-		//~ printf("\t\t\tm_errs.push_back(m_pos);\n");
-		//~ printf("\t\t\tm_errs.push_back(m_line);\n");
-		//~ printf("\t\t\tm_errs.push_back(m_col);\n");
 		printf("\t\t\tm_pos = pos_prev;\n");
-		printf("\t\t\tm_col = col_prev;\n");
 		printf("\t\t\tm_line = line_prev;\n");
+		printf("\t\t\tm_col = col_prev;\n");
 		printf("\t\t}\n");
 		// only add to AST if discard, inline and mergeup modifications not set
 		if ("discard" != rule.mod() && "inline" != rule.mod() && "mergeup" != rule.mod())
@@ -438,9 +418,8 @@ int main(int argc, char **argv)
 		printf("%s// ***ALTERNATES***\n", tabs.c_str());
 		printf("%sbool ok%d = false;\n", tabs.c_str(), depth);
 		printf("%suint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
+		printf("%suint32_t line_start%d = m_line;\n", tabs.c_str(), depth);
 		printf("%suint32_t col_start%d = m_col;\n", tabs.c_str(), depth);
-		printf("%suint32_t errs_prev = m_errs.size();\n", tabs.c_str());
-		//~ printf("%s\tprintf(\"!!%%u %%u\\n\", errs_prev, %u);\n", tabs.c_str(), depth);
 		if (depth > 0)
 		{
 			printf("%sASTNode astn%d(m_pos, \"alts_tmp\");\n", tabs.c_str(), depth);
@@ -450,7 +429,6 @@ int main(int argc, char **argv)
 		size_t n_elems = elems.size();
 		for (size_t e = 0; e < n_elems; e++)
 		{
-			//~ printf("%s\tm_errs.erase(m_errs.begin() + errs_prev, m_errs.end());\n", tabs.c_str());
 			if (e > 0) printf("\n");
 			print_alt(elems[e], depth + 1);
 			printf("%s\tif (ok%d) break;\n", tabs.c_str(), depth);
@@ -460,13 +438,10 @@ int main(int argc, char **argv)
 		printf("%s}\n", tabs.c_str());
 		printf("%sif (!ok%d)\n", tabs.c_str(), depth);
 		printf("%s{\n", tabs.c_str());
-		printf("%s\tm_errs.push_back(m_pos);\n", tabs.c_str());
-		printf("%s\tm_errs.push_back(m_line);\n", tabs.c_str());
-		printf("%s\tm_errs.push_back(m_col);\n", tabs.c_str());
 		printf("%s\tm_pos = pos_start%d;\n", tabs.c_str(), depth);
+		printf("%s\tm_line = line_start%d;\n", tabs.c_str(), depth);
 		printf("%s\tm_col = col_start%d;\n", tabs.c_str(), depth);
 		//~ if (depth > 0) printf("%s\tbreak;\n", tabs.c_str());
-		if (SCC_DEBUG) printf("%s\tprintf(\"--------------adding\\n\");\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
 		printf("%selse\n", tabs.c_str());
 		printf("%s{\n", tabs.c_str());
@@ -482,9 +457,6 @@ int main(int argc, char **argv)
 			printf("%s\t\tastn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
 			printf("%s\t}\n", tabs.c_str());
 		}
-		//~ if (SCC_DEBUG) printf("%s\tprintf(\"--------------removing\\n\");\n", tabs.c_str());
-		//~ printf("%s\tprintf(\"@@%%u %%u\\n\", errs_prev, %u);\n", tabs.c_str(), depth);
-		//~ printf("%s\tm_errs.erase(m_errs.begin() + errs_prev, m_errs.end());\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
 	}
 
@@ -501,6 +473,7 @@ int main(int argc, char **argv)
 		printf("%s{\n", tabs.c_str());
 		printf("%s\tbool ok%d = false;\n", tabs.c_str(), depth);
 		printf("%s\tuint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
+		printf("%s\tuint32_t line_start%d = m_line;\n", tabs.c_str(), depth);
 		printf("%s\tuint32_t col_start%d = m_col;\n", tabs.c_str(), depth);
 		printf("\n");
 
@@ -585,8 +558,18 @@ int main(int argc, char **argv)
 		printf("%sif (!ok%d)\n", tabs.c_str(), depth - 1);
 		printf("%s{\n", tabs.c_str());
 		printf("%s\tm_pos = pos_start%d;\n", tabs.c_str(), depth - 1);
+		printf("%s\tm_line = line_start%d;\n", tabs.c_str(), depth - 1);
 		printf("%s\tm_col = col_start%d;\n", tabs.c_str(), depth - 1);
 		printf("%s\tbreak;\n", tabs.c_str());
+		printf("%s}\n", tabs.c_str());
+		printf("%selse\n", tabs.c_str());
+		printf("%s{\n", tabs.c_str());
+		printf("%s\tif (m_pos > m_pos_ok)\n", tabs.c_str());
+		printf("%s\t{\n", tabs.c_str());
+		printf("%s\t\tm_pos_ok = m_pos;\n", tabs.c_str());
+		printf("%s\t\tm_line_ok = m_line;\n", tabs.c_str());
+		printf("%s\t\tm_col_ok = m_col;\n", tabs.c_str());
+		printf("%s\t}\n", tabs.c_str());
 		printf("%s}\n", tabs.c_str());
 	}
 
@@ -648,7 +631,7 @@ int main(int argc, char **argv)
 				range_ch1 = decode_to_int32(&escaped, (char *)elem.text()[idx2].c_str());
 				idx2++;
 				ch32 = decode_to_int32(&escaped, (char *)elem.text()[idx2].c_str());
-				// check for range 
+				// check for range separator
 				if ('-' == ch32 && !escaped)
 				{
 					flag_is_range = true;
@@ -693,7 +676,7 @@ int main(int argc, char **argv)
 				range_ch1 = decode_to_int32(&escaped, (char *)elem.text()[idx].c_str());
 				idx++;
 				ch32 = decode_to_int32(&escaped, (char *)elem.text()[idx].c_str());
-				// check for range 
+				// check for range separator
 				if ('-' == ch32 && !escaped)
 				{
 					flag_is_range = true;
@@ -1099,7 +1082,7 @@ private:
 				len_item = parse_id();
 				if (len_item > 0)
 				{
-					std::string name(&m_text[m_pos - len_item], len_item); 
+					std::string name(&m_text[m_pos - len_item], len_item);
 					elems.push_back(Elem(ElemType::NAME, name));
 					len += len_item;
 					break;
