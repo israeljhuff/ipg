@@ -14,6 +14,14 @@ print();
 print("asdf");
 print("asdf", 1);
 
+myObj.myMethod();
+myObj.myMethod("hi");
+myObj.myMethod("hi", 2);
+
+myObj.myMemberObj.myMethod("hi", 2);
+
+myObj.myMemberObj.myMemberObj2.myMethod("hi", 2);
+
 ((!5 * 4) << 2) > 6;
 ~5 & 21;
 
@@ -136,7 +144,7 @@ bool didItMatch = "a" =~ /(a*b+c[^d])|asdf|(x)/;
 /a*b+c[^d]|asdf|(xs*a)/;
 /a*b+c[^d]|asdf|(xs+|(a|[^a-zA-Z])|b?c|d*)/;
 
-class MyClass
+class SomeParentClass
 {
   public SomeType someVar = 1;
   protected sint32 anotherVar = 5;
@@ -156,6 +164,12 @@ class MyClass
   {
     return 3;
   }
+}
+
+class SomeChildClass : SomeParentClass
+{
+  private sint32 asdf = 2;
+  private string someMethod() {}
 }
 
 class FFT

@@ -11,11 +11,12 @@ ws                    discard : [ \n\r\t];
 comment               discard : "#" [^\r\n]*;
 wscm                  discard : ws | comment;
 
-class                         : class_keyword wscm* identifier wscm*
+class                         : class_keyword wscm* identifier wscm* (class_subclass_sep wscm* identifier wscm*)?
                                 class_open wscm*
                                 (class_access_spec wscm+ (statement_decl_vars | function_def) wscm*)*
                                 class_close;
 class_keyword         discard : "class";
+class_subclass_sep    discard : ":";
 class_access_spec             : "public" | "protected" | "private";
 class_open            discard : "{";
 class_close           discard : "}";
@@ -64,11 +65,12 @@ function_def                  : (type | expr_decl_vector_type | expr_decl_map_ty
                                 scope_close;
 func_def_param                : (type | expr_decl_vector_type | expr_decl_map_type | identifier) wscm+ identifier;
 
-function_call                 : identifier wscm*
+function_call                 : identifier wscm* (func_reference_sep wscm* identifier wscm*)*
                                 func_params_open wscm*
                                 (expr_non_assign wscm* (func_params_sep wscm* expr_non_assign wscm*)*)?
                                 func_params_close wscm*;
 
+func_reference_sep    discard : ".";
 func_params_sep       discard : ",";
 func_params_open      discard : "(";
 func_params_close     discard : ")";

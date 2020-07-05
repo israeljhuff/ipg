@@ -355,11 +355,17 @@ int main(int argc, char **argv)
 	ASTNode astn(0, "ROOT");
 	Parser p(buf);
 	int32_t retval = p.parse_%s(astn);
-	astn.print();
-	fprintf(stderr, "last fully-parsed element is before line %%d, col %%d, file position %%u of %%lu\n", p.line(), p.col(), p.pos(), p.len());
-	fprintf(stderr, "last partially-parsed element is before line %%d, col %%d\n", p.line_ok(), p.col_ok());
-	if (RET_FAIL == retval || p.pos() < p.len()) fprintf(stderr, "ERROR parsing\n");
-	else fprintf(stderr, "parsed successfully\n");
+	if (RET_FAIL == retval || p.pos() < p.len())
+	{
+		fprintf(stderr, "ERROR parsing\n");
+		fprintf(stderr, "last fully-parsed element is before line %%d, col %%d, file position %%u of %%lu\n", p.line(), p.col(), p.pos(), p.len());
+		fprintf(stderr, "last partially-parsed element is before line %%d, col %%d\n", p.line_ok(), p.col_ok());
+	}
+	else
+	{
+		astn.print();
+		fprintf(stderr, "parsed successfully\n");
+	}
 	delete[] buf;
 	return 0;
 }
