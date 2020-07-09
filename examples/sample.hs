@@ -2,6 +2,20 @@ hello();
 5;
 !5;
 
+a += 1, b += 1;
+
+loop (fp32 b = 2.5; a < 5 && b <= 4.5; a += 1, b += 0.5)
+{
+}
+
+loop ({ sint32 a = 1; fp32 b = 2.5; }; a < 5 && b <= 4.5; a += 1, b += 0.5)
+{
+}
+
+loop post ({ sint32 a = 1; fp32 b = 2.5; }; a < 5 && b <= 4.5; {a += 1, b += 0.5; someTask(); })
+{
+}
+
 {
   dummy();
   5 + 7;
@@ -13,6 +27,8 @@ hello();
 print();
 print("asdf");
 print("asdf", 1);
+
+doSomething(5, 2, doSomethingElse(), (1 + 2), 12 + 6);
 
 myObj.myMethod();
 myObj.myMethod("hi");
@@ -94,6 +110,8 @@ loop post
 }
 
 loop (;;) {}
+loop (a += 1;;) {}
+loop (a += 1, b += 1;;) {}
 loop (a = b - 7 * 5, c = d + 1, x = 5;;) {}
 loop (int32 a = b, c = d + 1, x = 5;;) {}
 loop (SomeClass a = 1, b = 2, c = 3;;) {}

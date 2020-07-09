@@ -4,8 +4,9 @@
 
 // Linux or Windows (Cygwin)
 // g++ --std=c++11 ipg.cpp -o ipg.exe && ./ipg.exe ipg.grammar > tmp.cpp
-// g++ --std=c++11 tmp.cpp && ./a.exe tmp.grammar
+// g++ --std=c++11 tmp.cpp -o tmp.exe && ./tmp.exe tmp.grammar
 
+// TODO: output ASTNode and Parser classes to a separate header file from main()
 // TODO: vector instead of map for rule list?
 // TODO: track names of last fully- and partially-parsed rules
 
@@ -358,7 +359,8 @@ int main(int argc, char **argv)
 	if (RET_FAIL == retval || p.pos() < p.len())
 	{
 		fprintf(stderr, "ERROR parsing\n");
-		fprintf(stderr, "last fully-parsed element is before line %%d, col %%d, file position %%u of %%lu\n", p.line(), p.col(), p.pos(), p.len());
+		fprintf(stderr, "last fully-parsed element is before line %%d, col %%d, file position %%u of %%lu\n",
+			p.line(), p.col(), p.pos(), p.len());
 		fprintf(stderr, "last partially-parsed element is before line %%d, col %%d\n", p.line_ok(), p.col_ok());
 	}
 	else
