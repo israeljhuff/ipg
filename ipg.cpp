@@ -9,62 +9,18 @@
 // TODO: output ASTNode and Parser classes to a separate header file from main()
 // TODO: vector instead of map for rule list?
 // TODO: track names of last fully- and partially-parsed rules
-// TODO: generated code should borrow C++-style prints from this code
 // TODO: clean up output code and reduce redundancy if/where possible
 
 #include <cstdint>
 #include <cstdio>
-#include <iostream>
 #include <map>
 #include <vector>
 
+#include "ASTNode.h"
+
 #define SCC_DEBUG 0
 
-// ----------------------------------------------------------------------------
-// variadic wrapper functions for printing to cout
-
-// single-argument
-template <typename T>
-void printstr(std::ostream &strm, std::string sep, std::string term, T t)
-{
-  strm << t << term;
-}
-
-// multi-argument
-template<typename T, typename... Args>
-void printstr(std::ostream &strm, std::string sep, std::string term, T t, Args... args)
-{
-  strm << t << sep;
-  printstr(strm, sep, term, args...);
-}
-
-// cout, no separator, no terminator
-template<typename T, typename... Args>
-void prints(T t, Args... args)
-{
-  printstr(std::cout, "", "", t, args...);
-}
-
-// cerr, no separator, no terminator
-template<typename T, typename... Args>
-void eprints(T t, Args... args)
-{
-  printstr(std::cerr, "", "", t, args...);
-}
-
-// cout, no separator, newline-terminated
-template<typename T, typename... Args>
-void println(T t, Args... args)
-{
-  printstr(std::cout, "", "\n", t, args...);
-}
-
-// cerr, no separator, newline-terminated
-template<typename T, typename... Args>
-void eprintln(T t, Args... args)
-{
-  printstr(std::cerr, "", "\n", t, args...);
-}
+using namespace IPG;
 
 // ----------------------------------------------------------------------------
 namespace IPG
@@ -81,32 +37,6 @@ enum class ElemType : uint32_t
 enum class QuantifierType : uint32_t
 {
 	ONE, ZERO_ONE, ZERO_PLUS, ONE_PLUS
-};
-
-// ----------------------------------------------------------------------------
-// abstract syntax tree node
-class ASTNode
-{
-public:
-	ASTNode() {}
-	ASTNode(uint32_t pos, std::string text) { m_pos = pos; m_text = text; }
-	void clear() { m_pos = 0; m_text.clear(); m_children.clear(); }
-	uint32_t pos() { return m_pos; }
-	std::string text() { return m_text; }
-	void add_child(ASTNode &child) { m_children.push_back(child); }
-    ASTNode &child(uint32_t index) { return m_children[index]; }
-	std::vector<ASTNode> &children() { return m_children; }
-	void print(uint32_t depth = 0)
-	{
-		prints(std::string(depth * 2, ' '), m_text);
-		if (m_children.size() > 0) prints(": ", m_children.size());
-		println("");
-		for (auto child : m_children) child.print(depth + 1);
-	}
-private:
-	uint32_t m_pos = 0;
-	std::string m_text;
-	std::vector<ASTNode> m_children;
 };
 
 // ----------------------------------------------------------------------------
@@ -306,35 +236,17 @@ public:
 #include <string>
 #include <vector>
 
+#include "ASTNode.h"
+
 // TODO: replace with enum class
 #define RET_FAIL 0
 #define RET_OK 1
 #define RET_INLINE 2
 
-class ASTNode
-{
-public:
-	ASTNode() {}
-	ASTNode(uint32_t pos, std::string text) { m_pos = pos; m_text = text; }
-	void clear() { m_pos = 0; m_text.clear(); m_children.clear(); }
-	uint32_t pos() { return m_pos; }
-	std::string text() { return m_text; }
-	void add_child(ASTNode &child) { m_children.push_back(child); }
-    ASTNode &child(uint32_t index) { return m_children[index]; }
-	std::vector<ASTNode> &children() { return m_children; }
-	void print(uint32_t depth = 0)
-	{
-		printf("%s%s", std::string(depth * 2, ' ').c_str(), m_text.c_str());
-		if (m_children.size() > 0) printf(": %lu", m_children.size());
-		printf("\n");
-		for (auto child : m_children) child.print(depth + 1);
-	}
-private:
-	uint32_t m_pos = 0;
-	std::string m_text;
-	std::vector<ASTNode> m_children;
-};
+using namespace IPG;
 
+namespace IPG
+{
 class Parser
 {
 private:
@@ -383,12 +295,13 @@ public:
 		return n_bytes;
 	}
 };
+};
 
 int main(int argc, char **argv)
 {
 	if (argc < 2)
 	{
-		fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
+		eprintln("Usage: ", argv[0], " <filename>");
 		return 1;
 	}
 	FILE *fp;
@@ -407,15 +320,16 @@ int main(int argc, char **argv)
 	R"foo((astn);
 	if (RET_FAIL == retval || p.pos() < p.len())
 	{
-		fprintf(stderr, "ERROR parsing\n");
-		fprintf(stderr, "last fully-parsed element is before line %d, col %d, file position %u of %lu\n",
-			p.line(), p.col(), p.pos(), p.len());
-		fprintf(stderr, "last partially-parsed element is before line %d, col %d\n", p.line_ok(), p.col_ok());
+		eprintln("ERROR parsing");
+		eprintln("last fully-parsed element is before line ",
+			p.line(), ", col ", p.col(), ", file position ", p.pos(), " of ", p.len());
+		eprintln("last partially-parsed element is before line %d, col %d",
+			p.line_ok(), p.col_ok());
 	}
 	else
 	{
 		astn.print();
-		fprintf(stderr, "parsed successfully\n");
+		eprintln("parsed successfully");
 	}
 	delete[] buf;
 	return 0;
@@ -430,7 +344,7 @@ int main(int argc, char **argv)
 		println("\t// ***RULE*** ", rule.to_string());
 		println("\tint32_t parse_", rule.name(), "(ASTNode &parent)");
 		println("\t{");
-		if (SCC_DEBUG) println("\t\tprintf(\"parse_", rule.name(), "()\\n\");");
+		if (SCC_DEBUG) println("\t\tprintln(\"parse_", rule.name(), "()\");");
 		println("\t\tuint32_t pos_prev = m_pos;");
 		println("\t\tuint32_t line_prev = m_line;");
 		println("\t\tuint32_t col_prev = m_col;");
@@ -504,7 +418,7 @@ int main(int argc, char **argv)
 		println(tabs, "{");
 		if (SCC_DEBUG)
 		{
-			println(tabs, "\tprintf(\"*%s*\\n\", std::string(&m_text[pos_start", depth, "], m_pos - pos_start", depth, ").c_str());");
+			println(tabs, "\tprintln(\"*\", std::string(&m_text[pos_start", depth, "], m_pos - pos_start", depth, "), \"*\");");
 		}
 		if (depth > 0)
 		{
@@ -1622,7 +1536,7 @@ private:
 			*escaped = true;
 			return esc_to_int32(str);
 		}
-	*escaped = false;
+		*escaped = false;
 		return utf8_to_int32(str);
 	}
 
