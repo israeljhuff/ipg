@@ -9,13 +9,62 @@
 // TODO: output ASTNode and Parser classes to a separate header file from main()
 // TODO: vector instead of map for rule list?
 // TODO: track names of last fully- and partially-parsed rules
+// TODO: generated code should borrow C++-style prints from this code
+// TODO: clean up output code and reduce redundancy if/where possible
 
 #include <cstdint>
 #include <cstdio>
+#include <iostream>
 #include <map>
 #include <vector>
 
 #define SCC_DEBUG 0
+
+// ----------------------------------------------------------------------------
+// variadic wrapper functions for printing to cout
+
+// single-argument
+template <typename T>
+void printstr(std::ostream &strm, std::string sep, std::string term, T t)
+{
+  strm << t << term;
+}
+
+// multi-argument
+template<typename T, typename... Args>
+void printstr(std::ostream &strm, std::string sep, std::string term, T t, Args... args)
+{
+  strm << t << sep;
+  printstr(strm, sep, term, args...);
+}
+
+// cout, no separator, no terminator
+template<typename T, typename... Args>
+void prints(T t, Args... args)
+{
+  printstr(std::cout, "", "", t, args...);
+}
+
+// cerr, no separator, no terminator
+template<typename T, typename... Args>
+void eprints(T t, Args... args)
+{
+  printstr(std::cerr, "", "", t, args...);
+}
+
+// cout, no separator, newline-terminated
+template<typename T, typename... Args>
+void println(T t, Args... args)
+{
+  printstr(std::cout, "", "\n", t, args...);
+}
+
+// cerr, no separator, newline-terminated
+template<typename T, typename... Args>
+void eprintln(T t, Args... args)
+{
+  printstr(std::cerr, "", "\n", t, args...);
+}
 
 // ----------------------------------------------------------------------------
 namespace IPG
@@ -49,9 +98,9 @@ public:
 	std::vector<ASTNode> &children() { return m_children; }
 	void print(uint32_t depth = 0)
 	{
-		printf("%s%s", std::string(depth * 2, ' ').c_str(), m_text.c_str());
-		if (m_children.size() > 0) printf(": %lu", m_children.size());
-		printf("\n");
+		prints(std::string(depth * 2, ' '), m_text);
+		if (m_children.size() > 0) prints(": ", m_children.size());
+		println("");
 		for (auto child : m_children) child.print(depth + 1);
 	}
 private:
@@ -211,12 +260,12 @@ public:
 	{
 		for (auto rule : m_grammar.rules())
 		{
-			fprintf(stderr, "%s:", rule.first.c_str());
+			eprints(rule.first, ":");
 			for (auto elem : rule.second.elems())
 			{
 				print_elem_debug(elem);
 			}
-			fprintf(stderr, "\n");
+			eprintln("");
 		}
 	}
 
@@ -226,23 +275,23 @@ public:
 		if (elem.sub_elems().size() > 0)
 		{
 			std::string tabs(depth, '\t');
-			if (ElemType::ALT == elem.type()) fprintf(stderr, "\n%s|\n", tabs.c_str());
-			else if (ElemType::GROUP == elem.type()) fprintf(stderr, "\n%s(\n", tabs.c_str());
-			fprintf(stderr, "%s", tabs.c_str());
+			if (ElemType::ALT == elem.type()) eprintln("\n", tabs, "|");
+			else if (ElemType::GROUP == elem.type()) eprintln("\n", tabs, "(");
+			eprints(tabs);
 			for (auto sub_elem : elem.sub_elems())
 			{
 				print_elem_debug(sub_elem, depth + 1);
 			}
-			if (ElemType::GROUP == elem.type()) fprintf(stderr, "\n%s)\n", tabs.c_str());
+			if (ElemType::GROUP == elem.type()) eprintln("\n", tabs, ")");
 		}
 		else
 		{
 			for (auto str : elem.text())
 			{
-				fprintf(stderr, " %s", str.c_str());
+				eprints(" ", str);
 			}
 		}
-		fprintf(stderr, "%s", elem.quantifier_strs()[elem.quantifier()].c_str());
+		eprints(elem.quantifier_strs()[elem.quantifier()]);
 	}
 
 	// ------------------------------------------------------------------------
@@ -250,8 +299,7 @@ public:
 	//       from parsing grammar
 	void print_parser()
 	{
-		printf(
-R"foo(
+		prints(R"foo(
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -276,8 +324,8 @@ public:
 	std::vector<ASTNode> &children() { return m_children; }
 	void print(uint32_t depth = 0)
 	{
-		printf("%%s%%s", std::string(depth * 2, ' ').c_str(), m_text.c_str());
-		if (m_children.size() > 0) printf(": %%lu", m_children.size());
+		printf("%s%s", std::string(depth * 2, ' ').c_str(), m_text.c_str());
+		if (m_children.size() > 0) printf(": %lu", m_children.size());
 		printf("\n");
 		for (auto child : m_children) child.print(depth + 1);
 	}
@@ -310,8 +358,7 @@ public:
 
 		for (auto rule : m_grammar.rules()) print_rule(rule.second);
 
-		printf(
-R"foo(
+		prints(R"foo(
 	// on success, writes extracted code bits to num
 	// returns number of bytes from utf-8 on success or -1 on failure
 	int32_t utf8_to_int32(int32_t *num, const char *str)
@@ -341,7 +388,7 @@ int main(int argc, char **argv)
 {
 	if (argc < 2)
 	{
-		fprintf(stderr, "Usage: %%s <filename>\n", argv[0]);
+		fprintf(stderr, "Usage: %s <filename>\n", argv[0]);
 		return 1;
 	}
 	FILE *fp;
@@ -355,13 +402,15 @@ int main(int argc, char **argv)
 	fclose(fp);
 	ASTNode astn(0, "ROOT");
 	Parser p(buf);
-	int32_t retval = p.parse_%s(astn);
+	int32_t retval = p.parse_)foo",
+	m_grammar.rule_root(),
+	R"foo((astn);
 	if (RET_FAIL == retval || p.pos() < p.len())
 	{
 		fprintf(stderr, "ERROR parsing\n");
-		fprintf(stderr, "last fully-parsed element is before line %%d, col %%d, file position %%u of %%lu\n",
+		fprintf(stderr, "last fully-parsed element is before line %d, col %d, file position %u of %lu\n",
 			p.line(), p.col(), p.pos(), p.len());
-		fprintf(stderr, "last partially-parsed element is before line %%d, col %%d\n", p.line_ok(), p.col_ok());
+		fprintf(stderr, "last partially-parsed element is before line %d, col %d\n", p.line_ok(), p.col_ok());
 	}
 	else
 	{
@@ -371,101 +420,100 @@ int main(int argc, char **argv)
 	delete[] buf;
 	return 0;
 }
-)foo", m_grammar.rule_root().c_str());
+)foo");
 	}
 
 	// ------------------------------------------------------------------------
 	void print_rule(Rule &rule)
 	{
-		printf("\n");
-		printf("\t// ***RULE*** %s\n", rule.to_string().c_str());
-		printf("\tint32_t parse_%s(ASTNode &parent)\n", rule.name().c_str());
-		printf("\t{\n");
-		if (SCC_DEBUG) printf("\t\tprintf(\"parse_%s()\\n\");\n", rule.name().c_str());
-		printf("\t\tuint32_t pos_prev = m_pos;\n");
-		printf("\t\tuint32_t line_prev = m_line;\n");
-		printf("\t\tuint32_t col_prev = m_col;\n");
+		println("");
+		println("\t// ***RULE*** ", rule.to_string());
+		println("\tint32_t parse_", rule.name(), "(ASTNode &parent)");
+		println("\t{");
+		if (SCC_DEBUG) println("\t\tprintf(\"parse_", rule.name(), "()\\n\");");
+		println("\t\tuint32_t pos_prev = m_pos;");
+		println("\t\tuint32_t line_prev = m_line;");
+		println("\t\tuint32_t col_prev = m_col;");
 		if ("mergeup" == rule.mod())
 		{
-			printf("\t\tASTNode &astn0 = parent;\n");
+			println("\t\tASTNode &astn0 = parent;");
 		}
 		else
 		{
-			printf("\t\tASTNode astn0(m_pos, \"%s\");\n", rule.name().c_str());
+			println("\t\tASTNode astn0(m_pos, \"", rule.name(), "\");");
 		}
-		printf("\n");
+		println("");
 
 		print_alts(rule.elems());
 
-		printf("\n");
-		printf("\t\tif (!ok0)\n");
-		printf("\t\t{\n");
-		printf("\t\t\tm_pos = pos_prev;\n");
-		printf("\t\t\tm_line = line_prev;\n");
-		printf("\t\t\tm_col = col_prev;\n");
-		printf("\t\t}\n");
+		println("");
+		println("\t\tif (!ok0)");
+		println("\t\t{");
+		println("\t\t\tm_pos = pos_prev;");
+		println("\t\t\tm_line = line_prev;");
+		println("\t\t\tm_col = col_prev;");
+		println("\t\t}");
 		// only add to AST if discard, inline and mergeup modifications not set
 		if ("discard" != rule.mod() && "inline" != rule.mod() && "mergeup" != rule.mod())
 		{
-			printf("\t\telse\n");
-			printf("\t\t{\n");
-			printf("\t\t\tparent.add_child(astn0);\n");
-			printf("\t\t}\n");
+			println("\t\telse");
+			println("\t\t{");
+			println("\t\t\tparent.add_child(astn0);");
+			println("\t\t}");
 		}
 		std::string ret_str = "RET_OK";
 		if ("inline" == rule.mod()) ret_str = "RET_INLINE";
-		printf("\t\tif (ok0) return %s;\n", ret_str.c_str());
-		printf("\t\telse return RET_FAIL;\n");
-		printf("\t}\n");
+		println("\t\tif (ok0) return ", ret_str, ";");
+		println("\t\telse return RET_FAIL;");
+		println("\t}");
 	}
 
 	// ------------------------------------------------------------------------
 	void print_alts(std::vector<Elem> &elems, uint32_t depth = 0)
 	{
 		std::string tabs(depth + 2, '\t');
-		printf("%s// ***ALTERNATES***\n", tabs.c_str());
-		printf("%sbool ok%d = false;\n", tabs.c_str(), depth);
-		printf("%suint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
-		printf("%suint32_t line_start%d = m_line;\n", tabs.c_str(), depth);
-		printf("%suint32_t col_start%d = m_col;\n", tabs.c_str(), depth);
+		println(tabs, "// ***ALTERNATES***");
+		println(tabs, "bool ok", depth, " = false;");
+		println(tabs, "uint32_t pos_start", depth, " = m_pos;");
+		println(tabs, "uint32_t line_start", depth, " = m_line;");
+		println(tabs, "uint32_t col_start", depth, " = m_col;");
 		if (depth > 0)
 		{
-			printf("%sASTNode astn%d(m_pos, \"alts_tmp\");\n", tabs.c_str(), depth);
+			println(tabs, "ASTNode astn", depth, "(m_pos, \"alts_tmp\");");
 		}
-		printf("%sfor (;;)\n", tabs.c_str());
-		printf("%s{\n", tabs.c_str());
+		println(tabs, "for (;;)");
+		println(tabs, "{");
 		size_t n_elems = elems.size();
 		for (size_t e = 0; e < n_elems; e++)
 		{
-			if (e > 0) printf("\n");
+			if (e > 0) println("");
 			print_alt(elems[e], depth + 1);
-			printf("%s\tif (ok%d) break;\n", tabs.c_str(), depth);
+			println(tabs, "\tif (ok", depth, ") break;");
 		}
-		printf("\n");
-		printf("%s\tbreak;\n", tabs.c_str());
-		printf("%s}\n", tabs.c_str());
-		printf("%sif (!ok%d)\n", tabs.c_str(), depth);
-		printf("%s{\n", tabs.c_str());
-		printf("%s\tm_pos = pos_start%d;\n", tabs.c_str(), depth);
-		printf("%s\tm_line = line_start%d;\n", tabs.c_str(), depth);
-		printf("%s\tm_col = col_start%d;\n", tabs.c_str(), depth);
-		//~ if (depth > 0) printf("%s\tbreak;\n", tabs.c_str());
-		printf("%s}\n", tabs.c_str());
-		printf("%selse\n", tabs.c_str());
-		printf("%s{\n", tabs.c_str());
+		println("");
+		println(tabs, "\tbreak;");
+		println(tabs, "}");
+		println(tabs, "if (!ok", depth, ")");
+		println(tabs, "{");
+		println(tabs, "\tm_pos = pos_start", depth, ";");
+		println(tabs, "\tm_line = line_start", depth, ";");
+		println(tabs, "\tm_col = col_start", depth, ";");
+		//~ if (depth > 0) println(tabs, "\tbreak;");
+		println(tabs, "}");
+		println(tabs, "else");
+		println(tabs, "{");
 		if (SCC_DEBUG)
 		{
-			printf("%s\tprintf(\"*%%s*\\n\", std::string(&m_text[pos_start%d], m_pos - pos_start%d).c_str());\n",
-				tabs.c_str(), depth, depth);
+			println(tabs, "\tprintf(\"*%s*\\n\", std::string(&m_text[pos_start", depth, "], m_pos - pos_start", depth, ").c_str());");
 		}
 		if (depth > 0)
 		{
-			printf("%s\tfor (auto child%d : astn%d.children())\n", tabs.c_str(), depth, depth);
-			printf("%s\t{\n", tabs.c_str());
-			printf("%s\t\tastn%d.add_child(child%d);\n", tabs.c_str(), depth - 2, depth);
-			printf("%s\t}\n", tabs.c_str());
+			println(tabs, "\tfor (auto child", depth, " : astn", depth, ".children())");
+			println(tabs, "\t{");
+			println(tabs, "\t\tastn", depth - 2, ".add_child(child", depth, ");");
+			println(tabs, "\t}");
 		}
-		printf("%s}\n", tabs.c_str());
+		println(tabs, "}");
 	}
 
 	// ------------------------------------------------------------------------
@@ -476,27 +524,27 @@ int main(int argc, char **argv)
 
 		std::string tabs(depth + 2, '\t');
 
-		printf("%s// ***ALTERNATE***%s\n", tabs.c_str(), elem.to_string().c_str());
-		printf("%sfor (;;)\n", tabs.c_str());
-		printf("%s{\n", tabs.c_str());
-		printf("%s\tbool ok%d = false;\n", tabs.c_str(), depth);
-		printf("%s\tuint32_t pos_start%d = m_pos;\n", tabs.c_str(), depth);
-		printf("%s\tuint32_t line_start%d = m_line;\n", tabs.c_str(), depth);
-		printf("%s\tuint32_t col_start%d = m_col;\n", tabs.c_str(), depth);
-		printf("\n");
+		println(tabs, "// ***ALTERNATE***", elem.to_string());
+		println(tabs, "for (;;)");
+		println(tabs, "{");
+		println(tabs, "\tbool ok", depth , " = false;");
+		println(tabs, "\tuint32_t pos_start", depth , " = m_pos;");
+		println(tabs, "\tuint32_t line_start", depth , " = m_line;");
+		println(tabs, "\tuint32_t col_start", depth , " = m_col;");
+		println("");
 
 		size_t n_elems = elem.sub_elems().size();
 		for (size_t e = 0; e < n_elems; e++)
 		{
-			if (e > 0) printf("\n");
+			if (e > 0) println("");
 			print_elem(elem.sub_elems()[e], depth + 1);
 		}
 
-		printf("\n");
-		//~ printf("%s\tok%d = true;\n", tabs.c_str(), depth - 1);
-		printf("%s\tok%d = ok%d;\n", tabs.c_str(), depth - 1, depth);
-		printf("%s\tbreak;\n", tabs.c_str());
-		printf("%s}\n", tabs.c_str());
+		println("");
+		//~ println(tabs, "\tok", depth - 1, " = true;");
+		println(tabs, "\tok", depth - 1 ," = ok", depth, ";");
+		println(tabs, "\tbreak;");
+		println(tabs, "}");
 	}
 
 	// ------------------------------------------------------------------------
@@ -507,78 +555,78 @@ int main(int argc, char **argv)
 
 		std::string tabs(depth + 2, '\t');
 
-		printf("%s// ***ELEMENT***%s\n", tabs.c_str(), elem.to_string().c_str());
+		println(tabs, "// ***ELEMENT***", elem.to_string());
 
 		if (elem.quantifier() == QuantifierType::ZERO_ONE)
 		{
-			printf("%sok%d = false;\n", tabs.c_str(), depth - 1);
-			printf("%sfor (;;)\n", tabs.c_str());
-			printf("%s{\n", tabs.c_str());
-			printf("%s\tpos_start%d = m_pos;\n", tabs.c_str(), depth - 1);
+			println(tabs, "ok", depth - 1, " = false;");
+			println(tabs, "for (;;)");
+			println(tabs, "{");
+			println(tabs, "\tpos_start", depth - 1, " = m_pos;");
 			print_elem_inner(elem, depth);
-			printf("%s\tok%d = true;\n", tabs.c_str(), depth - 1);
-			printf("%s\tbreak;\n", tabs.c_str());
-			printf("%s}\n", tabs.c_str());
+			println(tabs, "\tok", depth - 1, " = true;");
+			println(tabs, "\tbreak;");
+			println(tabs, "}");
 		}
 		else if (elem.quantifier() == QuantifierType::ZERO_PLUS)
 		{
-			printf("%sok%d = false;\n", tabs.c_str(), depth - 1);
-			printf("%sfor (;;)\n", tabs.c_str());
-			printf("%s{\n", tabs.c_str());
-			printf("%s\tpos_start%d = m_pos;\n", tabs.c_str(), depth - 1);
+			println(tabs, "ok", depth - 1, " = false;");
+			println(tabs, "for (;;)");
+			println(tabs, "{");
+			println(tabs, "\tpos_start", depth - 1, " = m_pos;");
 			print_elem_inner(elem, depth);
-			printf("%s\tif (ok%d) continue;\n", tabs.c_str(), depth);
-			printf("%s\tok%d = true;\n", tabs.c_str(), depth - 1);
-			printf("%s\tbreak;\n", tabs.c_str());
-			printf("%s}\n", tabs.c_str());
+			println(tabs, "\tif (ok", depth, ") continue;");
+			println(tabs, "\tok", depth - 1, " = true;");
+			println(tabs, "\tbreak;");
+			println(tabs, "}");
 		}
 		else if (elem.quantifier() == QuantifierType::ONE_PLUS)
 		{
-			printf("%sok%d = false;\n", tabs.c_str(), depth - 1);
-			printf("%sint32_t counter%d = 0;\n", tabs.c_str(), depth);
-			printf("%sfor (;;)\n", tabs.c_str());
-			printf("%s{\n", tabs.c_str());
-			printf("%s\tpos_start%d = m_pos;\n", tabs.c_str(), depth - 1);
+			println(tabs, "ok", depth - 1, " = false;");
+			println(tabs, "int32_t counter", depth, " = 0;");
+			println(tabs, "for (;;)");
+			println(tabs, "{");
+			println(tabs, "\tpos_start", depth - 1, " = m_pos;");
 			print_elem_inner(elem, depth);
-			printf("%s\tif (!ok%d) break;\n", tabs.c_str(), depth);
-			printf("%s\tcounter%d++;\n", tabs.c_str(), depth);
-			printf("%s}\n", tabs.c_str());
-			printf("%sok%d = (counter%d > 0);\n", tabs.c_str(), depth - 1, depth);
+			println(tabs, "\tif (!ok", depth, ") break;");
+			println(tabs, "\tcounter", depth, "++;");
+			println(tabs, "}");
+			println(tabs, "ok", depth - 1, " = (counter", depth, " > 0);");
 		}
 		else if (elem.quantifier() == QuantifierType::ONE)
 		{
-			printf("%sok%d = false;\n", tabs.c_str(), depth - 1);
-			printf("%sfor (;;)\n", tabs.c_str());
-			printf("%s{\n", tabs.c_str());
-			printf("%s\tpos_start%d = m_pos;\n", tabs.c_str(), depth - 1);
+			println(tabs, "ok", depth - 1, " = false;");
+			println(tabs, "for (;;)");
+			println(tabs, "{");
+			println(tabs, "\tpos_start", depth - 1, " = m_pos;");
 			print_elem_inner(elem, depth);
-			printf("%s\tok%d = ok%d;\n", tabs.c_str(), depth - 1, depth);
-			printf("%s\tbreak;\n", tabs.c_str());
-			printf("%s}\n", tabs.c_str());
+			println(tabs, "\tok", depth - 1, " = ok", depth, ";");
+			println(tabs, "\tbreak;");
+			println(tabs, "}");
 		}
 		else
 		{
 			uint32_t qt = (uint32_t)elem.quantifier();
-			fprintf(stderr, "FATAL ERROR: unsupported quantifier '%u'\n", qt);
+			eprintln("FATAL ERROR: unsupported quantifier '", qt, "'");
 			exit(1);
 		}
 
-		printf("%sif (!ok%d)\n", tabs.c_str(), depth - 1);
-		printf("%s{\n", tabs.c_str());
-		printf("%s\tm_pos = pos_start%d;\n", tabs.c_str(), depth - 1);
-		printf("%s\tm_line = line_start%d;\n", tabs.c_str(), depth - 1);
-		printf("%s\tm_col = col_start%d;\n", tabs.c_str(), depth - 1);
-		printf("%s\tbreak;\n", tabs.c_str());
-		printf("%s}\n", tabs.c_str());
-		printf("%selse\n", tabs.c_str());
-		printf("%s{\n", tabs.c_str());
-		printf("%s\tif (m_pos > m_pos_ok)\n", tabs.c_str());
-		printf("%s\t{\n", tabs.c_str());
-		printf("%s\t\tm_pos_ok = m_pos;\n", tabs.c_str());
-		printf("%s\t\tm_line_ok = m_line;\n", tabs.c_str());
-		printf("%s\t\tm_col_ok = m_col;\n", tabs.c_str());
-		printf("%s\t}\n", tabs.c_str());
-		printf("%s}\n", tabs.c_str());
+		println(tabs, "if (!ok", depth - 1, ")");
+		println(tabs, "{");
+		println(tabs, "\tm_pos = pos_start", depth - 1, ";");
+		println(tabs, "\tm_line = line_start", depth - 1, ";");
+		println(tabs, "\tm_col = col_start", depth - 1, ";");
+		println(tabs, "\tbreak;");
+		println(tabs, "}");
+		println(tabs, "else");
+		println(tabs, "{");
+		println(tabs, "\tif (m_pos > m_pos_ok)");
+		println(tabs, "\t{");
+		println(tabs, "\t\tm_pos_ok = m_pos;");
+		println(tabs, "\t\tm_line_ok = m_line;");
+		println(tabs, "\t\tm_col_ok = m_col;");
+		println(tabs, "\t}");
+		println(tabs, "}");
 	}
 
 	// ------------------------------------------------------------------------
@@ -588,23 +636,23 @@ int main(int argc, char **argv)
 
 		if (ElemType::NAME == elem.type())
 		{
-			printf("%sint32_t ok%d = parse_%s(astn%d);\n", tabs.c_str(), depth, elem.text()[0].c_str(), depth - 2);
+			println(tabs, "int32_t ok", depth, " = parse_", elem.text()[0], "(astn", depth - 2, ");");
 			if ("inline" == m_grammar.rules()[elem.text()[0]].mod())
 			{
-				printf("%sif (RET_INLINE == ok%d)\n", tabs.c_str(), depth);
-				printf("%s{\n", tabs.c_str());
-				printf("%s\tASTNode astn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
-					tabs.c_str(), depth, depth - 1, depth - 1, depth - 1);
-				printf("%s\tastn%d.add_child(astn%d);\n", tabs.c_str(), depth - 2, depth);
-				printf("%s}\n", tabs.c_str());
+				println(tabs, "if (RET_INLINE == ok", depth, ")");
+				println(tabs, "{");
+				println(tabs, "\tASTNode astn", depth, "(pos_start", depth - 1,
+					", std::string(&m_text[pos_start", depth - 1, "], m_pos - pos_start", depth - 1, "));");
+				println(tabs, "\tastn", depth - 2, ".add_child(astn", depth, ");");
+				println(tabs, "}");
 			}
 		}
 		// NOTE: assumes valid expression since parser should have validated
 		else if (ElemType::CH_CLASS == elem.type())
 		{
-			printf("%sbool ok%d = false;\n", tabs.c_str(), depth);
-			printf("%sint32_t ch_decoded;\n", tabs.c_str());
-			printf("%sint32_t len_item%d = utf8_to_int32(&ch_decoded, &m_text[m_pos]);\n", tabs.c_str(), depth);
+			println(tabs, "bool ok", depth, " = false;");
+			println(tabs, "int32_t ch_decoded;");
+			println(tabs, "int32_t len_item", depth, " = utf8_to_int32(&ch_decoded, &m_text[m_pos]);");
 
 			int32_t idx = 1;
 			bool flag_negate_all = false;
@@ -619,7 +667,7 @@ int main(int argc, char **argv)
 			}
 
 			// print expression to check if char matches character class
-			printf("%sif (len_item%d > 0 && %s(true", tabs.c_str(), depth, flag_negate_all ? "!" : "");
+			prints(tabs, "if (len_item", depth, " > 0 && ", (flag_negate_all ? "!" : ""), "(true");
 
 			// negative expressions
 			// loop over all tokens except leading and trailing [ ]
@@ -650,24 +698,24 @@ int main(int argc, char **argv)
 
 				if (flag_negate)
 				{
-					printf(" && ");
+					prints(" && ");
 
 					// print expression for this part of character class
 					if (!flag_is_range)
 					{
-						printf("%s(ch_decoded == %d)", flag_negate ? "!" : "", range_ch1);
+						prints((flag_negate ? "!" : ""), "(ch_decoded == ", range_ch1, ")");
 					}
 					else
 					{
-						printf("%s(ch_decoded >= %d && ch_decoded <= %d)",
-							flag_negate ? "!" : "", range_ch1, range_ch2);
+						prints((flag_negate ? "!" : ""), "(ch_decoded >= ", range_ch1,
+							" && ch_decoded <= ", range_ch2, ")");
 					}
 				}
 			}
 
 			// positive expressions
 			// loop over all tokens except leading and trailing [ ]
-			printf(" && (false");
+			prints(" && (false");
 			for (; idx < elem.text().size() - 1;)
 			{
 				bool flag_is_range = false;
@@ -695,58 +743,57 @@ int main(int argc, char **argv)
 
 				if (!flag_negate)
 				{
-					printf(" || ");
+					prints(" || ");
 
 					// print expression for this part of character class
 					if (!flag_is_range)
 					{
-						printf("(ch_decoded == %d)", range_ch1);
+						prints("(ch_decoded == ", range_ch1, ")");
 					}
 					else
 					{
-						printf("(ch_decoded >= %d && ch_decoded <= %d)", range_ch1, range_ch2);
+						prints("(ch_decoded >= ", range_ch1, " && ch_decoded <= ", range_ch2, ")");
 					}
 				}
 			}
-			printf(")))\n");
-			printf("%s{ m_pos += len_item%d; m_col += len_item%d; ok%d = true; }\n",
-				tabs.c_str(), depth, depth, depth);
+			println(")))");
+			println(tabs, "{ m_pos += len_item", depth, "; m_col += len_item", depth, "; ok", depth, " = true; }");
 
-			printf("%sif (ok%d)\n", tabs.c_str(), depth);
-			printf("%s{\n", tabs.c_str());
-			printf("%s\tASTNode astn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
-				tabs.c_str(), depth, depth - 1, depth - 1, depth - 1);
-			printf("%s\tastn%d.add_child(astn%d);\n", tabs.c_str(), depth - 2, depth);
-			printf("%s\tif ('\\n' == ch_decoded)\n", tabs.c_str());
-			printf("%s\t{\n", tabs.c_str());
-			printf("%s\t\tm_line++;\n", tabs.c_str());
-			printf("%s\t\tm_col = 1;\n", tabs.c_str());
-			printf("%s\t}\n", tabs.c_str());
-			printf("%s}\n", tabs.c_str());
+			println(tabs, "if (ok", depth, ")");
+			println(tabs, "{");
+			println(tabs, "\tASTNode astn", depth, "(pos_start", depth - 1,
+				", std::string(&m_text[pos_start", depth - 1, "], m_pos - pos_start", depth - 1, "));");
+			println(tabs, "\tastn", depth - 2, ".add_child(astn", depth, ");");
+			println(tabs, "\tif ('\\n' == ch_decoded)");
+			println(tabs, "\t{");
+			println(tabs, "\t\tm_line++;");
+			println(tabs, "\t\tm_col = 1;");
+			println(tabs, "\t}");
+			println(tabs, "}");
 		}
 		else if (ElemType::STRING == elem.type())
 		{
-			printf("%sbool ok%d = false;\n", tabs.c_str(), depth);
-			printf("%sconst char *str = %s;\n", tabs.c_str(), elem.text()[0].c_str());
-			printf("%sint32_t i = 0;\n", tabs.c_str());
-			printf("%sfor (; i < strlen(str) && m_text[m_pos] == str[i]; i++, m_pos++, m_col++);\n", tabs.c_str());
-			printf("%sif (i == strlen(str)) ok%d = true;\n", tabs.c_str(), depth);
+			println(tabs, "bool ok", depth, " = false;");
+			println(tabs, "const char *str = ", elem.text()[0], ";");
+			println(tabs, "int32_t i = 0;");
+			println(tabs, "for (; i < strlen(str) && m_text[m_pos] == str[i]; i++, m_pos++, m_col++);");
+			println(tabs, "if (i == strlen(str)) ok", depth, " = true;");
 
-			printf("%sif (ok%d)\n", tabs.c_str(), depth);
-			printf("%s{\n", tabs.c_str());
-			printf("%s\tASTNode astn%d(pos_start%d, std::string(&m_text[pos_start%d], m_pos - pos_start%d));\n",
-				tabs.c_str(), depth, depth - 1, depth - 1, depth - 1);
-			printf("%s\tastn%d.add_child(astn%d);\n", tabs.c_str(), depth - 2, depth);
-			printf("%s}\n", tabs.c_str());
+			println(tabs, "if (ok", depth, ")");
+			println(tabs, "{");
+			println(tabs, "\tASTNode astn", depth, "(pos_start", depth - 1,
+				", std::string(&m_text[pos_start", depth - 1, "], m_pos - pos_start", depth - 1, "));");
+			println(tabs, "\tastn", depth - 2, ".add_child(astn", depth, ");");
+			println(tabs, "}");
 		}
 		else if (ElemType::GROUP == elem.type())
 		{
-			printf("%sint32_t len_item%d = -1;\n", tabs.c_str(), depth);
+			println(tabs, "int32_t len_item", depth, " = -1;");
 			print_alts(elem.sub_elems(), depth);
 		}
 		else
 		{
-			fprintf(stderr, "FATAL ERROR: unsupported element type: %d\n", (int)elem.type());
+			eprintln("FATAL ERROR: unsupported element type: ", (int)elem.type());
 			exit(1);
 		}
 	}
@@ -805,7 +852,7 @@ int main(int argc, char **argv)
 
 				if (m_grammar.rules().find(rule_name) == m_grammar.rules().end())
 				{
-					fprintf(stderr, "ERROR: undefined rule '%s'\n", rule_name.c_str());
+					eprintln("ERROR: undefined rule '", rule_name, "'");
 					retval = false;
 				}
 
@@ -841,7 +888,7 @@ int main(int argc, char **argv)
 				auto it = visited.find(rule_name);
 				if (it == visited.end())
 				{
-					fprintf(stderr, "ERROR: unreachable rule '%s'\n", rule_name.c_str());
+					eprintln("ERROR: unreachable rule '", rule_name, "'");
 				}
 			}
 			retval = false;
@@ -854,7 +901,7 @@ int main(int argc, char **argv)
 	// rules : ws (comment ws)* rule+;
 	bool parse_grammar(ASTNode &node_w, const char *text_r)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_grammar %d\n", m_pos);
+		if (SCC_DEBUG) eprintln("parse_grammar ", m_pos);
 		node_w.clear();
 		m_text = text_r;
 
@@ -881,7 +928,7 @@ int main(int argc, char **argv)
 	// rule : ws id ws ("discard" | "inline" | "mergeup")? ws ":" ws alts ws ";" ws (comment ws)*;
 	bool parse_rule(ASTNode &node_w)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_rule %d\n", m_pos);
+		if (SCC_DEBUG) eprintln("parse_rule ", m_pos);
 		parse_ws();
 
 		int32_t len_name = parse_id();
@@ -893,7 +940,7 @@ int main(int argc, char **argv)
 
 		if (m_grammar.rules().find(rule_name) != m_grammar.rules().end())
 		{
-			fprintf(stderr, "ERROR: duplicate rule name '%s'\n", rule_name.c_str());
+			eprintln("ERROR: duplicate rule name '", rule_name, "'");
 			return false;
 		}
 
@@ -937,7 +984,7 @@ int main(int argc, char **argv)
 		}
 		while (m_text[m_pos] != '\0' && m_pos_prev != m_pos);
 
-		if (SCC_DEBUG) fprintf(stderr, "exiting parse_rule %d\n", m_pos);
+		if (SCC_DEBUG) eprintln("exiting parse_rule ", m_pos);
 		return true;
 	}
 
@@ -948,7 +995,7 @@ private:
 	// parse and discard whitespace
 	void parse_ws()
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_ws\n");
+		if (SCC_DEBUG) eprintln("parse_ws");
 		for (;;)
 		{
 			char ch = m_text[m_pos];
@@ -974,7 +1021,7 @@ private:
 	// parse and discard comment
 	void parse_comment()
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_comment\n");
+		if (SCC_DEBUG) eprintln("parse_comment");
 		char ch = m_text[m_pos];
 		if (ch != '#') return;
 		for (;;)
@@ -991,7 +1038,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_id()
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_id\n");
+		if (SCC_DEBUG) eprintln("parse_id");
 		int32_t len = 0;
 		char ch = m_text[m_pos];
 		if (!((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z'))) return -1;
@@ -1018,7 +1065,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_alts(std::vector<Elem> &elems)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_alts\n");
+		if (SCC_DEBUG) eprintln("parse_alts");
 		int32_t len = 0;
 		bool trailing_bar;
 		while (m_text[m_pos] != '\0')
@@ -1054,7 +1101,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_alt(std::vector<Elem> &elems)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_alt %d\n", m_pos);
+		if (SCC_DEBUG) eprintln("parse_alt ", m_pos);
 		int32_t len = 0;
 		while (m_text[m_pos] != '\0')
 		{
@@ -1073,7 +1120,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_element(std::vector<Elem> &elems)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_element\n");
+		if (SCC_DEBUG) eprintln("parse_element");
 
 		int32_t len = 0;
 		while (m_text[m_pos] != ';' && m_text[m_pos] != '\0')
@@ -1139,7 +1186,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_group(std::vector<Elem> &elems)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_group\n");
+		if (SCC_DEBUG) eprintln("parse_group");
 
 		uint32_t pos_prev = m_pos;
 		uint32_t col_prev = m_col;
@@ -1195,7 +1242,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_string(std::vector<Elem> &elems)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_string %d\n", m_pos);
+		if (SCC_DEBUG) eprintln("parse_string ", m_pos);
 		uint32_t pos_prev = m_pos;
 		uint32_t col_prev = m_col;
 		uint32_t line_prev = m_line;
@@ -1237,7 +1284,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_ch_class(std::vector<Elem> &elems)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_ch_class %d\n", m_pos);
+		if (SCC_DEBUG) eprintln("parse_ch_class ", m_pos);
 
 		uint32_t pos_prev = m_pos;
 		uint32_t col_prev = m_col;
@@ -1248,7 +1295,7 @@ private:
 		char ch = m_text[m_pos];
 		if (ch != '[')
 		{
-			if (SCC_DEBUG) fprintf(stderr, "exiting parse_ch_class %d\n", len);
+			if (SCC_DEBUG) eprintln("exiting parse_ch_class ", len);
 			return -1;
 		}
 
@@ -1277,7 +1324,7 @@ private:
 			m_pos = pos_prev;
 			m_col = col_prev;
 			m_line = line_prev;
-			if (SCC_DEBUG) fprintf(stderr, "exiting parse_ch_class %d\n", len);
+			if (SCC_DEBUG) eprintln("exiting parse_ch_class ", len);
 			return -1;
 		}
 		len += len_br;
@@ -1336,7 +1383,7 @@ private:
 			len++;
 		}
 
-		if (SCC_DEBUG) fprintf(stderr, "exiting parse_ch_class %d\n", len);
+		if (SCC_DEBUG) eprintln("exiting parse_ch_class ", len);
 		return len;
 	}
 
@@ -1345,7 +1392,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_ch_class_range(Elem &elem)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_ch_class_range\n");
+		if (SCC_DEBUG) eprintln("parse_ch_class_range");
 
 		int32_t len = 0;
 
@@ -1363,7 +1410,7 @@ private:
 			{
 				if (ch == ch_class_reserve_chars[i])
 				{
-					fprintf(stderr, "###*%c*\n", ch);
+					eprintln("###*", ch, "*");
 					return -1;
 				}
 			}
@@ -1400,8 +1447,7 @@ private:
 		bool escaped = false;
 		if (decode_to_int32(&escaped, ch1.c_str()) >= decode_to_int32(&escaped, ch2.c_str()))
 		{
-			fprintf(stderr, "ERROR: invalid range [%s-%s]: '%s' is not < '%s'\n",
-				ch1.c_str(), ch2.c_str(), ch1.c_str(), ch2.c_str());
+			eprintln("ERROR: invalid range [", ch1, "-", ch2, "]: '", ch1, "' >= '", ch2, "'. left char must be < right char");
 			return -1;
 		}
 
@@ -1418,7 +1464,7 @@ private:
 	// returns length on success, -1 on failure
 	int32_t parse_char(Elem &elem)
 	{
-		if (SCC_DEBUG) fprintf(stderr, "parse_char\n");
+		if (SCC_DEBUG) eprintln("parse_char");
 		char ch = m_text[m_pos];
 		if (ch >= 0 && ch < ' ') return -1;
 
@@ -1617,7 +1663,7 @@ int main(int argc, char **argv)
 
 	if (argc < 2)
 	{
-		fprintf(stderr, "Usage: %s <grammer_file>\n", argv[0]);
+		eprintln("Usage: ", argv[0], " <grammer_file>");
 		return 1;
 	}
 
@@ -1625,12 +1671,12 @@ int main(int argc, char **argv)
 	fp = fopen(argv[1], "rb");
 	if (nullptr == fp)
 	{
-		fprintf(stderr, "ERROR opening file '%s'\n", argv[1]);
+		eprintln("ERROR opening file '", argv[1], "'");
 		return 1;
 	}
 	fseek(fp, 0, SEEK_END);
 	size_t file_len = ftell(fp);
-	fprintf(stderr, "file_len = %lu\n", file_len);
+	eprintln("file_len = ", file_len);
 	fseek(fp, 0, SEEK_SET);
 	char *buf = new char[file_len + 1];
 	buf[file_len] = '\0';
@@ -1638,10 +1684,10 @@ int main(int argc, char **argv)
 	fclose(fp);
 	if (bytes_read != file_len)
 	{
-		fprintf(stderr, "ERROR reading file\n");
+		eprintln("ERROR reading file");
 		return 1;
 	}
-	fprintf(stderr, "read: %lu\n", bytes_read);
+	eprintln("read: ", bytes_read);
 
 	bool ok = pg.parse_grammar(node, buf);
 	if (ok) ok = pg.check_rules();
@@ -1649,12 +1695,11 @@ int main(int argc, char **argv)
 	{
 		pg.print_parser();
 		pg.print_rules_debug();
-		fprintf(stderr, "parsed successfully\n");
+		eprintln("parsed successfully");
 	}
 	else
 	{
-		fprintf(stderr, "ERROR parsing grammar near line %u, col %u\n",
-			pg.line(), pg.col());
+		eprintln("ERROR parsing grammar near line ", pg.line(), ", col ", pg.col());
 	}
 
 	delete[] buf;
