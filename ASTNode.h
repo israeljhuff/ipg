@@ -1,7 +1,7 @@
 #ifndef ASTNode_h
 #define ASTNode_h
 
-#include "printstr.h"
+#include "utils.h"
 
 namespace IPG
 {
