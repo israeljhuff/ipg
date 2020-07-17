@@ -1,8 +1,9 @@
 // ----------------------------------------------------------------------------
 // example main function for quickly testing a new parser
 //
-// to build on Linux or Windows (Cygwin):
+// to build and run on Linux or Windows (Cygwin):
 //  g++ --std=c++11 example_main.cpp -o example_parser.exe
+//  ./exampler_parser.exe SOMEFILENAME
 //
 //  NOTE: assumes parser saved to "example_parser.h"
 
@@ -19,6 +20,11 @@ int main(int argc, char **argv)
 	}
 	FILE *fp;
 	fp = fopen(argv[1], "rb");
+	if (nullptr == fp)
+	{
+		eprintln("ERROR opening file: ", argv[1]);
+		return 1;
+	}
 	fseek(fp, 0, SEEK_END);
 	size_t file_len = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
@@ -28,14 +34,13 @@ int main(int argc, char **argv)
 	fclose(fp);
 	ASTNode astn(0, "ROOT");
 	Parser p(buf);
-	int32_t retval = p.parse(astn);
-	if (RET_FAIL == retval || p.pos() < p.len())
+	if (RET_OK != p.parse(astn))
 	{
 		eprintln("ERROR parsing");
-		eprintln("last fully-parsed element is before line ",
-			p.line(), ", col ", p.col(), ", file position ", p.pos(), " of ", p.len());
-		eprintln("last partially-parsed element is before line %d, col %d",
-			p.line_ok(), p.col_ok());
+		eprintln("last fully-parsed element is before line ", p.line(),
+			", col ", p.col(), ", file position ", p.pos(), " of ", p.len());
+		eprintln("last partially-parsed element is before line ",
+			p.line_ok(), ", col ", p.col_ok());
 	}
 	else
 	{

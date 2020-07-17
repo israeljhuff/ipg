@@ -10,6 +10,7 @@
 // TODO: track names of last fully- and partially-parsed rules
 // TODO: clean up output code and reduce redundancy if/where possible
 // TODO: should generated class name be user-configurable instead of always "Parser"?
+// TODO: add ###TEMPLATE### elements to example_main.cpp to allow changing it?
 
 #include <cstdio>
 #include <map>
@@ -263,7 +264,12 @@ public:
 	uint32_t line_ok() { return m_line_ok; }
 	uint32_t pos_ok() { return m_pos_ok; }
 )foo");
-		println("int32_t parse(ASTNode &parent) { return parse_", m_grammar.rule_root(), "(parent); }");
+		println("\tint32_t parse(ASTNode &parent)");
+		println("\t{");
+		println("\t\tint32_t retval = parse_", m_grammar.rule_root(), "(parent);");
+		println("\t\tif (RET_OK != retval || pos() < len()) return RET_FAIL;");
+		println("\t\treturn RET_OK;");
+		println("\t}");
 
 		for (auto rule : m_grammar.rules()) print_rule(rule.second);
 
