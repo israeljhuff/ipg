@@ -1,8 +1,8 @@
 ###############################################################################
-# scripting language name TBD
+# Israel's Programming Language (IPL)
 # grammar definition
 # Author: Israel Huff
-# https://github.com/israeljhuff/???
+# https://github.com/israeljhuff/ipl
 ###############################################################################
 
 # root of parse tree ##########################################################

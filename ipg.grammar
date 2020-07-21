@@ -1,7 +1,9 @@
+###############################################################################
 # Israel's Parser Generator (IPG)
 # grammar definition
 # Author: Israel Huff
 # https://github.com/israeljhuff/ipg
+###############################################################################
 
 rules                      : ws (comment ws)* rule+;
 rule                       : ws id ws rule_mod rule_sep alts rule_end ws (comment ws)*;

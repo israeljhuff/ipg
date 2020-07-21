@@ -1,3 +1,4 @@
+// ----------------------------------------------------------------------------
 // Israel's Parser Generator (IPG)
 // Author: Israel Huff
 // https://github.com/israeljhuff/ipg
