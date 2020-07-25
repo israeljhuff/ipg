@@ -231,7 +231,10 @@ public:
 	void print_parser()
 	{
 		prints(
-R"foo(#include <cstdio>
+R"foo(#ifndef PARSER_H
+#define PARSER_H
+
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -256,7 +259,7 @@ private:
 	uint32_t m_line_ok = 1;
 	uint32_t m_col_ok = 1;
 public:
-	Parser(char *text) { m_text = text; }
+	Parser(const char *text) { m_text = text; }
 	size_t len() { return strlen(m_text); }
 	uint32_t col() { return m_col; }
 	uint32_t line() { return m_line; }
@@ -276,6 +279,7 @@ public:
 
 		println("};");
 		println("};");
+		println("#endif");
 	}
 
 	// ------------------------------------------------------------------------
