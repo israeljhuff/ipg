@@ -13,6 +13,8 @@
 // TODO: should generated class name be user-configurable instead of always "Parser"?
 // TODO: add ###TEMPLATE### elements to example_main.cpp to allow changing it?
 
+// TODO: make SCC_DEBUG command-line settable
+
 #include <cstdio>
 #include <map>
 #include <vector>
@@ -348,6 +350,9 @@ public:
 			if (e > 0) println("");
 			print_alt(elems[e], depth + 1);
 			println(tabs, "\tif (ok", depth, ") break;");
+			println(tabs, "\tm_pos = pos_start", depth, ";");
+			println(tabs, "\tm_line = line_start", depth, ";");
+			println(tabs, "\tm_col = col_start", depth, ";");
 		}
 		println("");
 		println(tabs, "\tbreak;");
