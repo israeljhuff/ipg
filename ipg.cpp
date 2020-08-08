@@ -14,7 +14,6 @@
 // TODO: should generated class name be user-configurable instead of always "Parser"?
 // TODO: make SCC_DEBUG command-line settable
 
-// TODO: print_eval_elem() needs to correctly handle 'inline'
 // TODO: ASTNode class should store line and col #s to allow evaluator to stack trace
 
 #include <cstdio>
@@ -302,11 +301,11 @@ public:
 
 		for (auto rule : m_grammar.rules())
 		{
+			// only print_eval() if rule has none of these mods and it contains
+			// at least one NAME type element or sub-element
 			if (rule.second.mod() != "discard"
 				&& rule.second.mod() != "inline"
 				&& rule.second.mod() != "mergeup"
-				// no need to print_eval() if rule contains no NAME type
-				// elements or sub-elements
 				&& rule_has_named_elem(rule.second)) 
 			{
 				print_eval(rule.second);
@@ -323,7 +322,6 @@ R"foo(
 	}
 
 	// ------------------------------------------------------------------------
-// TODO: need to handle elems of child rules if they have "mergeup" or "inline" mod (also "discard"?)
 	void print_eval(Rule &rule)
 	{
 		println("");
@@ -393,14 +391,10 @@ R"foo(
 					println("\t\t\t\tif (!result) break;");
 					println("\t\t\t}");
 				}
-				// AST nodes with "discard" set should not be in AST, so eval
-				// code should not try to process them
-				else if (rule.mod() == "discard")
+				// rules with 'discard' or 'inline' mod should not appear in
+				// AST, so eval code should not try to process them
+				else if (rule.mod() == "discard" || rule.mod() == "inline")
 				{
-				}
-				else if (rule.mod() == "inline")
-				{
-// TODO: need to process all descendants as if they are children of grandparent
 				}
 				// process child nodes as if they are children of grandparent
 				// and omit eval_*() for this rule
