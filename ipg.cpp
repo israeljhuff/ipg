@@ -7,13 +7,15 @@
 //  g++ --std=c++11 ipg.cpp -o ipg.exe && ./ipg.exe ipg.grammar > tmp.cpp
 //  g++ --std=c++11 tmp.cpp -o tmp.exe && ./tmp.exe tmp.grammar
 
-// TODO: vector instead of map for rule list?
-// TODO: track names of last fully- and partially-parsed rules
-// TODO: clean up output code and reduce redundancy if/where possible
+// TODO: vector instead of map for rule list? or otherwise make sure rule order
+//       in generated code matches that of input grammar
+// TODO: track names of last fully- and partially-parsed rules to help with debugging
+// TODO: clean up output code and reduce redundancy where possible
 // TODO: should generated class name be user-configurable instead of always "Parser"?
-// TODO: add ###TEMPLATE### elements to example_main.cpp to allow changing it?
-
 // TODO: make SCC_DEBUG command-line settable
+
+// TODO: print_eval_elem() needs to correctly handle 'inline'
+// TODO: ASTNode class should store line and col #s to allow evaluator to stack trace
 
 #include <cstdio>
 #include <map>
@@ -180,7 +182,7 @@ private:
 // public methods
 public:
 	// ------------------------------------------------------------------------
-	ParseGen() { m_grammar.clear(); }
+	ParseGen() {}
 
 	// ------------------------------------------------------------------------
 	uint32_t col() { return m_col; }
@@ -260,6 +262,7 @@ private:
 	uint32_t m_pos_ok = 0;
 	uint32_t m_line_ok = 1;
 	uint32_t m_col_ok = 1;
+
 public:
 	Parser(const char *text) { m_text = text; }
 	size_t len() { return strlen(m_text); }
@@ -270,18 +273,159 @@ public:
 	uint32_t line_ok() { return m_line_ok; }
 	uint32_t pos_ok() { return m_pos_ok; }
 )foo");
-		println("\tint32_t parse(ASTNode &parent)");
+		println("\tint32_t parse(ASTNode &root_node)");
 		println("\t{");
-		println("\t\tint32_t retval = parse_", m_grammar.rule_root(), "(parent);");
+		println("\t\tint32_t retval = parse_", m_grammar.rule_root(), "(root_node);");
 		println("\t\tif (RET_OK != retval || pos() < len()) return RET_FAIL;");
 		println("\t\treturn RET_OK;");
 		println("\t}");
+		println("");
+		prints("private:");
 
 		for (auto rule : m_grammar.rules()) print_rule(rule.second);
 
-		println("};");
-		println("};");
-		println("#endif");
+		prints(
+R"foo(
+};
+
+class Evaluator
+{
+public:
+)foo");
+		println("\tbool eval(ASTNode &root_node)");
+		println("\t{");
+		println("\t\tbool retval = eval_", m_grammar.rule_root(), "(root_node);");
+		println("\t\treturn retval;");
+		println("\t}");
+		println("");
+		prints("private:");
+
+		for (auto rule : m_grammar.rules())
+		{
+			if (rule.second.mod() != "discard"
+				&& rule.second.mod() != "inline"
+				&& rule.second.mod() != "mergeup"
+				// no need to print_eval() if rule contains no NAME type
+				// elements or sub-elements
+				&& rule_has_named_elem(rule.second)) 
+			{
+				print_eval(rule.second);
+			}
+		}
+
+		prints(
+R"foo(
+};
+
+};
+#endif
+)foo");
+	}
+
+	// ------------------------------------------------------------------------
+// TODO: need to handle elems of child rules if they have "mergeup" or "inline" mod (also "discard"?)
+	void print_eval(Rule &rule)
+	{
+		println("");
+		println("\t// ***RULE*** ", rule.to_string());
+		println("\tbool eval_", rule.name(), "(ASTNode &node)");
+		println("\t{");
+		println("\t\tbool result = true;");
+		println("");
+		println("\t\t// TODO: your code here");
+		println("");
+		println("\t\tfor (auto child : node.children())");
+		println("\t\t{");
+		for (auto elem : rule.elems()) print_eval_elem(elem);
+		println("\t\t}");
+		println("");
+		println("\t\t// TODO: your code here");
+		println("");
+		println("\t\treturn result;");
+		println("\t}");
+	}
+
+	// ------------------------------------------------------------------------
+	// check if rule contains at least one named element
+	bool rule_has_named_elem(Rule &rule)
+	{
+		bool has_named_elem = false;
+		for (auto elem : rule.elems())
+		{
+			has_named_elem |= elem_or_sub_has_name(elem);
+		}
+		return has_named_elem;
+	}
+
+	// ------------------------------------------------------------------------
+	// check if element or any of its child elements contain at least one node
+	// with ElemType::NAME
+	bool elem_or_sub_has_name(Elem &elem)
+	{
+		if (elem.type() == ElemType::NAME) return true;
+		else if (elem.type() == ElemType::ALT
+			|| elem.type() == ElemType::GROUP)
+		{
+			for (auto sub_elem : elem.sub_elems())
+			{
+				if (elem_or_sub_has_name(sub_elem)) return true;
+			}
+		}
+		return false;
+	}
+
+	// ------------------------------------------------------------------------
+	void print_eval_elem(Elem &elem)
+	{
+		if (elem.type() == ElemType::NAME)
+		{
+			std::string name = elem.text()[0];
+			Rule &rule = m_grammar.rules()[name];
+			// only need to print_eval() if rule contains NAME type elements or
+			// sub-elements
+			if (rule_has_named_elem(rule))
+			{
+				if (rule.mod() == "") 
+				{
+					println("\t\t\tif (child.text() == \"", name, "\")");
+					println("\t\t\t{");
+					println("\t\t\t\tresult &= eval_", name, "(child);");
+					println("\t\t\t\tif (!result) break;");
+					println("\t\t\t}");
+				}
+				// AST nodes with "discard" set should not be in AST, so eval
+				// code should not try to process them
+				else if (rule.mod() == "discard")
+				{
+				}
+				else if (rule.mod() == "inline")
+				{
+// TODO: need to process all descendants as if they are children of grandparent
+				}
+				// process child nodes as if they are children of grandparent
+				// and omit eval_*() for this rule
+				else if (rule.mod() == "mergeup")
+				{
+					for (auto sub_elem : rule.elems())
+					{
+						print_eval_elem(sub_elem);
+					}
+				}
+				else
+				{
+					eprintln("FATAL ERROR: unsupported rule modifier '", rule.mod(), "'");
+					exit(1);
+				}
+			}
+		}
+		else if (elem.type() == ElemType::ALT
+			|| elem.type() == ElemType::GROUP)
+		{
+			for (auto sub_elem : elem.sub_elems())
+			{
+				print_eval_elem(sub_elem);
+			}
+		}
 	}
 
 	// ------------------------------------------------------------------------
@@ -289,7 +433,7 @@ public:
 	{
 		println("");
 		println("\t// ***RULE*** ", rule.to_string());
-		println("\tint32_t parse_", rule.name(), "(ASTNode &parent)");
+		println("\tint32_t parse_", rule.name(), "(ASTNode &node)");
 		println("\t{");
 		if (SCC_DEBUG) println("\t\tprintln(\"parse_", rule.name(), "()\");");
 		println("\t\tuint32_t pos_prev = m_pos;");
@@ -297,7 +441,7 @@ public:
 		println("\t\tuint32_t col_prev = m_col;");
 		if ("mergeup" == rule.mod())
 		{
-			println("\t\tASTNode &astn0 = parent;");
+			println("\t\tASTNode &astn0 = node;");
 		}
 		else
 		{
@@ -319,7 +463,7 @@ public:
 		{
 			println("\t\telse");
 			println("\t\t{");
-			println("\t\t\tparent.add_child(astn0);");
+			println("\t\t\tnode.add_child(astn0);");
 			println("\t\t}");
 		}
 		std::string ret_str = "RET_OK";
