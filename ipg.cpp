@@ -14,8 +14,6 @@
 // TODO: should generated class name be user-configurable instead of always "Parser"?
 // TODO: make SCC_DEBUG command-line settable
 
-// TODO: ASTNode class should store line and col #s to allow evaluator to stack trace
-
 #include <cstdio>
 #include <map>
 #include <vector>
@@ -23,8 +21,6 @@
 #include "ASTNode.h"
 
 #define SCC_DEBUG 0
-
-using namespace IPG;
 
 // ----------------------------------------------------------------------------
 namespace IPG
@@ -439,7 +435,7 @@ R"foo(
 		}
 		else
 		{
-			println("\t\tASTNode astn0(m_pos, \"", rule.name(), "\");");
+			println("\t\tASTNode astn0(m_pos, m_line, m_col, \"", rule.name(), "\");");
 		}
 		println("");
 
@@ -478,7 +474,7 @@ R"foo(
 		println(tabs, "uint32_t col_start", depth, " = m_col;");
 		if (depth > 0)
 		{
-			println(tabs, "ASTNode astn", depth, "(m_pos, \"alts_tmp\");");
+			println(tabs, "ASTNode astn", depth, "(m_pos, m_line, m_col, \"alts_tmp\");");
 		}
 		println(tabs, "for (;;)");
 		println(tabs, "{");
@@ -644,6 +640,7 @@ R"foo(
 				println(tabs, "if (RET_INLINE == ok", depth, ")");
 				println(tabs, "{");
 				println(tabs, "\tASTNode astn", depth, "(pos_start", depth - 1,
+					", line_start", depth - 1, ", col_start", depth - 1,
 					", std::string(&m_text[pos_start", depth - 1, "], m_pos - pos_start", depth - 1, "));");
 				println(tabs, "\tastn", depth - 2, ".add_child(astn", depth, ");");
 				println(tabs, "}");
@@ -764,6 +761,7 @@ R"foo(
 			println(tabs, "if (ok", depth, ")");
 			println(tabs, "{");
 			println(tabs, "\tASTNode astn", depth, "(pos_start", depth - 1,
+				", line_start", depth - 1, ", col_start", depth - 1,
 				", std::string(&m_text[pos_start", depth - 1, "], m_pos - pos_start", depth - 1, "));");
 			println(tabs, "\tastn", depth - 2, ".add_child(astn", depth, ");");
 			println(tabs, "\tif ('\\n' == ch_decoded)");
@@ -784,6 +782,7 @@ R"foo(
 			println(tabs, "if (ok", depth, ")");
 			println(tabs, "{");
 			println(tabs, "\tASTNode astn", depth, "(pos_start", depth - 1,
+				", line_start", depth - 1, ", col_start", depth - 1,
 				", std::string(&m_text[pos_start", depth - 1, "], m_pos - pos_start", depth - 1, "));");
 			println(tabs, "\tastn", depth - 2, ".add_child(astn", depth, ");");
 			println(tabs, "}");
@@ -901,10 +900,9 @@ R"foo(
 
 	// ------------------------------------------------------------------------
 	// rules : ws (comment ws)* rule+;
-	bool parse_grammar(ASTNode &node_w, const char *text_r)
+	bool parse_grammar(const char *text_r)
 	{
 		if (SCC_DEBUG) eprintln("parse_grammar ", m_pos);
-		node_w.clear();
 		m_text = text_r;
 
 		parse_ws();
@@ -919,7 +917,7 @@ R"foo(
 
 		while (m_text[m_pos] != '\0')
 		{
-			bool ok = parse_rule(node_w);
+			bool ok = parse_rule();
 			if (!ok) return false;
 		}
 
@@ -928,7 +926,7 @@ R"foo(
 
 	// ------------------------------------------------------------------------
 	// rule : ws id ws ("discard" | "inline" | "mergeup")? ws ":" ws alts ws ";" ws (comment ws)*;
-	bool parse_rule(ASTNode &node_w)
+	bool parse_rule()
 	{
 		if (SCC_DEBUG) eprintln("parse_rule ", m_pos);
 		parse_ws();
@@ -1636,12 +1634,11 @@ private:
 };
 };
 
+using namespace IPG;
+
 // ----------------------------------------------------------------------------
 int main(int argc, char **argv)
 {
-	IPG::ParseGen pg;
-	IPG::ASTNode node;
-
 	if (argc < 2)
 	{
 		eprintln("Usage: ", argv[0], " <grammer_file>");
@@ -1670,7 +1667,8 @@ int main(int argc, char **argv)
 	}
 	eprintln("read: ", bytes_read);
 
-	bool ok = pg.parse_grammar(node, buf);
+	ParseGen pg;
+	bool ok = pg.parse_grammar(buf);
 	if (ok) ok = pg.check_rules();
 	if (ok)
 	{
