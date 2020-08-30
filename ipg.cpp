@@ -293,7 +293,7 @@ public:
 		println("\t\treturn retval;");
 		println("\t}");
 		println("");
-		prints("private:");
+		prints("protected:");
 
 		for (auto rule : m_grammar.rules())
 		{

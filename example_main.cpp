@@ -32,7 +32,7 @@ int main(int argc, char **argv)
 	buf[file_len] = '\0';
 	size_t bytes_read = fread(buf, 1, file_len, fp);
 	fclose(fp);
-	ASTNode astn(0, "ROOT");
+	ASTNode astn(0, 1, 1, "ROOT");
 	Parser p(buf);
 	if (RET_OK != p.parse(astn))
 	{
@@ -46,6 +46,12 @@ int main(int argc, char **argv)
 	{
 		astn.print();
 		eprintln("parsed successfully");
+
+		Evaluator e;
+		// skip "ROOT" node and assume 1 child node
+		// NOTE: this must be changed if multiple top-level nodes allowed
+		if (e.eval(astn.child(0))) eprintln("evaluated successfully");
+		else eprintln("ERROR evaluating");
 	}
 	delete[] buf;
 	return 0;
