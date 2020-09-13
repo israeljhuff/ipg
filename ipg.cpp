@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "ASTNode.h"
+#include "EvaluationState.h"
 
 #define SCC_DEBUG 0
 
@@ -239,6 +240,7 @@ R"foo(#ifndef PARSER_H
 #include <vector>
 
 #include "ASTNode.h"
+#include "EvaluationState.h"
 
 // TODO: replace with enum class
 #define RET_FAIL 0
@@ -287,9 +289,9 @@ class Evaluator
 {
 public:
 )foo");
-		println("\tbool eval(ASTNode &root_node)");
+		println("\tvirtual bool eval(ASTNode &root_node, EvaluationState &eval_state)");
 		println("\t{");
-		println("\t\tbool retval = eval_", m_grammar.rule_root(), "(root_node);");
+		println("\t\tbool retval = eval_", m_grammar.rule_root(), "(root_node, eval_state);");
 		println("\t\treturn retval;");
 		println("\t}");
 		println("");
@@ -322,7 +324,7 @@ R"foo(
 	{
 		println("");
 		println("\t// ***RULE*** ", rule.to_string());
-		println("\tbool eval_", rule.name(), "(ASTNode &node)");
+		println("\tvirtual bool eval_", rule.name(), "(ASTNode &node, EvaluationState &eval_state)");
 		println("\t{");
 		println("\t\tbool result = true;");
 		println("");
@@ -383,7 +385,7 @@ R"foo(
 				{
 					println("\t\t\tif (child.text() == \"", name, "\")");
 					println("\t\t\t{");
-					println("\t\t\t\tresult &= eval_", name, "(child);");
+					println("\t\t\t\tresult = eval_", name, "(child, eval_state);");
 					println("\t\t\t\tif (!result) break;");
 					println("\t\t\t}");
 				}
