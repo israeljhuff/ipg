@@ -9,6 +9,10 @@
 
 // TODO: vector instead of map for rule list? or otherwise make sure rule order
 //       in generated code matches that of input grammar
+// TODO: use enum instead of strings for comparing names in parser and evaluator
+// TODO: in generated evaluator code, prevent duplicate child type checks:
+//       for example, eval_expr_flow_control() has 2 copies of "if (child.text() == "expr_non_assign")"
+
 // TODO: track names of last fully- and partially-parsed rules to help with debugging
 // TODO: clean up output code and reduce redundancy where possible
 // TODO: should generated class name be user-configurable instead of always "Parser"?
@@ -19,7 +23,6 @@
 #include <vector>
 
 #include "ASTNode.h"
-#include "EvaluationState.h"
 
 #define SCC_DEBUG 0
 
@@ -327,16 +330,19 @@ R"foo(
 		println("\tvirtual bool eval_", rule.name(), "(ASTNode &node, EvaluationState &eval_state)");
 		println("\t{");
 		println("\t\tbool result = true;");
-		println("");
-		println("\t\t// TODO: your code here");
-		println("");
+		//~ println("");
+		//~ println("\t\t// TODO: your code here");
+		//~ println("");
+// TODO: instead of lumping all together in one loop, print_eval_elem() once per element unless QuantifierType != ONE
+		println("\t\t// ", rule.elems().size());
+		println("\t\t// ", rule.elems()[0].sub_elems().size());
 		println("\t\tfor (auto child : node.children())");
 		println("\t\t{");
 		for (auto elem : rule.elems()) print_eval_elem(elem);
 		println("\t\t}");
-		println("");
-		println("\t\t// TODO: your code here");
-		println("");
+		//~ println("");
+		//~ println("\t\t// TODO: your code here");
+		//~ println("");
 		println("\t\treturn result;");
 		println("\t}");
 	}
@@ -358,7 +364,9 @@ R"foo(
 	// with ElemType::NAME
 	bool elem_or_sub_has_name(Elem &elem)
 	{
-		if (elem.type() == ElemType::NAME) return true;
+		if (elem.type() == ElemType::NAME
+			|| elem.type() == ElemType::STRING
+			|| elem.type() == ElemType::CH_CLASS) return true;
 		else if (elem.type() == ElemType::ALT
 			|| elem.type() == ElemType::GROUP)
 		{
@@ -373,7 +381,9 @@ R"foo(
 	// ------------------------------------------------------------------------
 	void print_eval_elem(Elem &elem)
 	{
-		if (elem.type() == ElemType::NAME)
+		if (elem.type() == ElemType::NAME
+			|| elem.type() == ElemType::STRING
+			|| elem.type() == ElemType::CH_CLASS)
 		{
 			std::string name = elem.text()[0];
 			Rule &rule = m_grammar.rules()[name];
@@ -527,6 +537,7 @@ R"foo(
 		println(tabs, "// ***ALTERNATE***", elem.to_string());
 		println(tabs, "for (;;)");
 		println(tabs, "{");
+		println(tabs, "\tint32_t counter", depth + 1, " = 0;");
 		println(tabs, "\tbool ok", depth , " = false;");
 		println(tabs, "\tuint32_t pos_start", depth , " = m_pos;");
 		println(tabs, "\tuint32_t line_start", depth , " = m_line;");
@@ -583,7 +594,7 @@ R"foo(
 		else if (elem.quantifier() == QuantifierType::ONE_PLUS)
 		{
 			println(tabs, "ok", depth - 1, " = false;");
-			println(tabs, "int32_t counter", depth, " = 0;");
+			println(tabs, "counter", depth, " = 0;");
 			println(tabs, "for (;;)");
 			println(tabs, "{");
 			println(tabs, "\tpos_start", depth - 1, " = m_pos;");
