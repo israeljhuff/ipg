@@ -10,8 +10,6 @@
 // TODO: vector instead of map for rule list? or otherwise make sure rule order
 //       in generated code matches that of input grammar
 // TODO: use enum instead of strings for comparing names in parser and evaluator
-// TODO: in generated evaluator code, prevent duplicate child type checks:
-//       for example, eval_expr_flow_control() has 2 copies of "if (child.text() == "expr_non_assign")"
 
 // TODO: track names of last fully- and partially-parsed rules to help with debugging
 // TODO: clean up output code and reduce redundancy where possible
@@ -329,20 +327,19 @@ R"foo(
 		println("\t// ***RULE*** ", rule.to_string());
 		println("\tvirtual bool eval_", rule.name(), "(ASTNode &node, EvaluationState &eval_state)");
 		println("\t{");
-		println("\t\tbool result = true;");
-		//~ println("");
-		//~ println("\t\t// TODO: your code here");
-		//~ println("");
-// TODO: instead of lumping all together in one loop, print_eval_elem() once per element unless QuantifierType != ONE
-		println("\t\t// ", rule.elems().size());
-		println("\t\t// ", rule.elems()[0].sub_elems().size());
-		println("\t\tfor (auto child : node.children())");
+		println("\t\tbool result = false;");
+		println("\t\tint c = 0;");
+		println("\t\tint c_prev = 0;");
+// TODO: fix this KLUDGE that handles empty elements with all children having quantifiers * or ?
+println("\t\tif (0 == node.children().size()) return true;");
+		println("\t\tfor (;;)");
 		println("\t\t{");
-		for (auto elem : rule.elems()) print_eval_elem(elem);
+		for (auto elem : rule.elems()) print_eval_elem(elem, 3);
+		println("\t\t\tbreak;");
 		println("\t\t}");
-		//~ println("");
-		//~ println("\t\t// TODO: your code here");
-		//~ println("");
+// TODO: re-enable this check when other bugs fixed?
+		//~ println("\t\tfprintf(stderr, \"%d %d\\n\", c, node.children().size());");
+		//~ println("\t\tif (c < node.children().size()) return false;");
 		println("\t\treturn result;");
 		println("\t}");
 	}
@@ -379,8 +376,10 @@ R"foo(
 	}
 
 	// ------------------------------------------------------------------------
-	void print_eval_elem(Elem &elem)
+	void print_eval_elem(Elem &elem, int depth)
 	{
+		std::string tabs(depth, '\t');
+
 		if (elem.type() == ElemType::NAME
 			|| elem.type() == ElemType::STRING
 			|| elem.type() == ElemType::CH_CLASS)
@@ -393,24 +392,82 @@ R"foo(
 			{
 				if (rule.mod() == "") 
 				{
-					println("\t\t\tif (child.text() == \"", name, "\")");
-					println("\t\t\t{");
-					println("\t\t\t\tresult = eval_", name, "(child, eval_state);");
-					println("\t\t\t\tif (!result) break;");
-					println("\t\t\t}");
+println(tabs, "// \"", rule.name(), "\" has QUANTIFIER = ", (uint32_t)elem.quantifier());
+					if (QuantifierType::ONE == elem.quantifier())
+					{
+						println(tabs, "if (c >= node.children().size())");
+						println(tabs, "{");
+						println(tabs, "\tresult = false;");
+						println(tabs, "\tbreak;");
+						println(tabs, "}");
+						println(tabs, "if (node.children()[c].text() == \"", name, "\")");
+						println(tabs, "{");
+						println(tabs, "\tresult = eval_", name, "(node.children()[c], eval_state);");
+						println(tabs, "\tif (!result) break;");
+						println(tabs, "\tc++;");
+						println(tabs, "}");
+					}
+					else if (QuantifierType::ZERO_ONE == elem.quantifier())
+					{
+						println(tabs, "if (c < node.children().size() && node.children()[c].text() == \"", name, "\")");
+						println(tabs, "{");
+						println(tabs, "\tresult = eval_", name, "(node.children()[c], eval_state);");
+						println(tabs, "\tif (result) c++;");
+						//~ println(tabs, "\tresult = true;");
+						println(tabs, "}");
+					}
+					else if (QuantifierType::ZERO_PLUS == elem.quantifier())
+					{
+						println(tabs, "while (c < node.children().size() && node.children()[c].text() == \"", name, "\" && c < node.children().size())");
+						println(tabs, "{");
+						println(tabs, "\tresult = eval_", name, "(node.children()[c], eval_state);");
+						println(tabs, "\tif (!result) break;");
+						println(tabs, "\tc++;");
+						println(tabs, "}");
+						//~ println(tabs, "result = true;");
+					}
+					else if (QuantifierType::ONE_PLUS == elem.quantifier())
+					{
+						println(tabs, "c_prev = c;");
+						//~ println(tabs, "result = false;");
+						println(tabs, "while (c < node.children().size() && node.children()[c].text() == \"", name, "\" && c < node.children().size())");
+						println(tabs, "{");
+						println(tabs, "\tresult = eval_", name, "(node.children()[c], eval_state);");
+						println(tabs, "\tif (!result) break;");
+						println(tabs, "\tc++;");
+						println(tabs, "}");
+						println(tabs, "if (c_prev == c) break;");
+						println(tabs, "result = true;");
+					}
+					else
+					{
+						eprintln("FATAL ERROR: unsupported quantifier type '",
+							std::to_string((uint32_t)elem.quantifier()), "'");
+						exit(1);
+					}
 				}
-				// rules with 'discard' or 'inline' mod should not appear in
-				// AST, so eval code should not try to process them
-				else if (rule.mod() == "discard" || rule.mod() == "inline")
+				// rules with 'discard' mod should not appear in AST, so eval
+				// code should not try to process them
+				else if (rule.mod() == "discard")
 				{
+					println(tabs, "// DISCARDED: ", rule.name());
+				}
+				// rules with 'inline' mod should not appear in AST, so eval
+				// code should not try to process them
+				else if (rule.mod() == "inline")
+				{
+// TODO: should be processed?
+					println(tabs, "// INLINED: ", rule.name());
+					println(tabs, "result = true;");
 				}
 				// process child nodes as if they are children of grandparent
 				// and omit eval_*() for this rule
 				else if (rule.mod() == "mergeup")
 				{
+					println(tabs, "// MERGING: ", rule.name());
 					for (auto sub_elem : rule.elems())
 					{
-						print_eval_elem(sub_elem);
+						print_eval_elem(sub_elem, depth);
 					}
 				}
 				else
@@ -419,13 +476,94 @@ R"foo(
 					exit(1);
 				}
 			}
+			else
+			{
+				if (elem.type() == ElemType::STRING)
+				{
+					println(tabs, "if (c < node.children().size() && node.children()[c].text() == ", elem.text()[0], ")");
+					println(tabs, "{");
+					println(tabs, "\tresult = true;");
+					println(tabs, "\tc++;");
+					println(tabs, "}");
+				}
+				else
+				{
+					println(tabs, "// TODO: type = ", (uint32_t)elem.type(), ", string = ", elem.to_string());
+				}
+			}
 		}
-		else if (elem.type() == ElemType::ALT
-			|| elem.type() == ElemType::GROUP)
+		else if (elem.type() == ElemType::ALT)
 		{
+			println(tabs, "// ALT");
+			println(tabs, "while (!result)");
+			println(tabs, "{");
 			for (auto sub_elem : elem.sub_elems())
 			{
-				print_eval_elem(sub_elem);
+				print_eval_elem(sub_elem, depth + 1);
+			}
+			println(tabs, "\tbreak;");
+			println(tabs, "}");
+			//~ println(tabs, "if (result) break;");
+		}
+		else if (elem.type() == ElemType::GROUP)
+		{
+			println(tabs, "// GROUP");
+			println(tabs, "result = false;");
+			if (QuantifierType::ONE == elem.quantifier())
+			{
+				println(tabs, "for (;;)");
+				println(tabs, "{");
+				for (auto sub_elem : elem.sub_elems())
+				{
+					print_eval_elem(sub_elem, depth + 1);
+				}
+				//~ println(tabs, "\tif (!result) break;");
+				println(tabs, "\tbreak;");
+				println(tabs, "}");
+			}
+			else if (QuantifierType::ZERO_ONE == elem.quantifier())
+			{
+				println(tabs, "for (;;)");
+				println(tabs, "{");
+				for (auto sub_elem : elem.sub_elems())
+				{
+					print_eval_elem(sub_elem, depth + 1);
+				}
+				//~ println(tabs, "\tresult = true;");
+				println(tabs, "\tbreak;");
+				println(tabs, "}");
+			}
+			else if (QuantifierType::ZERO_PLUS == elem.quantifier())
+			{
+				println(tabs, "result = true;");
+				println(tabs, "while (result)");
+				println(tabs, "{");
+				println(tabs, "\tresult = false;");
+				for (auto sub_elem : elem.sub_elems())
+				{
+					print_eval_elem(sub_elem, depth + 1);
+				}
+				println(tabs, "}");
+				println(tabs, "result = true;");
+			}
+			else if (QuantifierType::ONE_PLUS == elem.quantifier())
+			{
+				println(tabs, "c_prev = c;");
+				println(tabs, "while (result)");
+				println(tabs, "{");
+				println(tabs, "\tresult = false;");
+				for (auto sub_elem : elem.sub_elems())
+				{
+					print_eval_elem(sub_elem, depth + 1);
+				}
+				println(tabs, "}");
+				println(tabs, "if (c_prev != c) result = true;");
+			}
+			else
+			{
+				eprintln("FATAL ERROR: unsupported quantifier type '",
+					std::to_string((uint32_t)elem.quantifier()), "'");
+				exit(1);
 			}
 		}
 	}
